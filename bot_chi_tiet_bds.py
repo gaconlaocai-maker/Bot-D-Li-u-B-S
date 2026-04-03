@@ -26,7 +26,6 @@ def extract_number(text):
         return int(float(num_str)) 
     return 0
 
-# [ĐÃ FIX LỖI ẢNH MÃ HÓA]: Hàm xóa sạch dấu tiếng Việt chuẩn SEO, tránh lỗi % URL trên Cloudinary
 def tao_slug(s):
     if not s: return ""
     s = str(s).lower()
@@ -37,21 +36,27 @@ def tao_slug(s):
     s = re.sub(r'[ùúụủũưừứựửữ]', 'u', s)
     s = re.sub(r'[ỳýỵỷỹ]', 'y', s)
     s = re.sub(r'đ', 'd', s)
-    s = re.sub(r'[^a-z0-9\s-]', '', s) # Chỉ giữ lại chữ cái không dấu, số và dấu gạch ngang
+    s = re.sub(r'[^a-z0-9\s-]', '', s) 
     s = re.sub(r'\s+', '-', s)
     return re.sub(r'-+', '-', s).strip('-')
 
-# ================= 2. AI BIÊN TẬP (JSON MODE) =================
+# ================= 2. AI BIÊN TẬP & BÓC TÁCH THÔNG SỐ =================
 def ai_analyze_bds(tieu_de, ngu_canh_tho):
     print(f"🤖 Đang gửi dữ liệu thô sang AI (Độ dài: {len(ngu_canh_tho)} ký tự)...")
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     
+    # [ĐÃ NÂNG CẤP]: Ép AI bóc tách chi tiết thông số kỹ thuật
     prompt = (
         f"Bạn là chuyên gia BĐS Lào Cai. Hãy đọc bài đăng thô và trả về ĐÚNG định dạng JSON sau:\n"
         f"{{\n"
-        f"  \"loai_bds\": \"Phân loại BĐS (vd: Nhà riêng, Đất nền, Biệt thự, Căn hộ...)\",\n"
-        f"  \"html_clean\": \"Viết lại nội dung bằng mã HTML sạch (<p>, <ul>, <li>), TUYỆT ĐỐI XÓA SẠCH SĐT, link và tên môi giới\"\n"
+        f"  \"loai_bds\": \"Phân loại (vd: villa, hotel, land, nhà phố...)\",\n"
+        f"  \"phong_ngu\": \"Chỉ trả về con số (vd: 10). Nếu không thấy trả về null\",\n"
+        f"  \"phong_tam\": \"Chỉ trả về con số (vd: 12). Nếu không thấy trả về null\",\n"
+        f"  \"he_so_tang\": \"Chỉ trả về con số (vd: 3). Nếu không thấy trả về null\",\n"
+        f"  \"huong_nha\": \"(vd: Bắc, Đông Nam...). Nếu không thấy trả về null\",\n"
+        f"  \"phap_ly\": \"(vd: Sổ đỏ, Sổ hồng...). Nếu không thấy trả về null\",\n"
+        f"  \"html_clean\": \"Viết lại nội dung mô tả BĐS bằng mã HTML sạch (<p>, <ul>, <li>), TUYỆT ĐỐI XÓA SẠCH SĐT, link và tên môi giới\"\n"
         f"}}\n\n"
         f"Nội dung thô: {ngu_canh_tho}"
     )
@@ -66,7 +71,7 @@ def ai_analyze_bds(tieu_de, ngu_canh_tho):
     try:
         res = requests.post(url, headers=headers, json=payload, timeout=30)
         ai_res = json.loads(res.json()['choices'][0]['message']['content'])
-        print("✅ AI đã xử lý xong và trả về JSON.")
+        print("✅ AI đã bóc tách thông số và xử lý nội dung xong.")
         return ai_res
     except Exception as e:
         print(f"⚠️ Lỗi AI Groq: {str(e)}")
@@ -92,106 +97,126 @@ def process_image(url_goc, slug):
         print(f"    ⚠️ Lỗi xử lý ảnh: {str(e)}")
         return ""
 
-# ================= 4. QUY TRÌNH QUÉT CHÍNH =================
+# ================= 4. QUY TRÌNH QUÉT CHÍNH (ĐA TRANG) =================
 def run_bot():
     base_url = "https://batdongsan.com.vn/nha-dat-ban-sa-pa-lca"
-    print("🚀 BẮT ĐẦU CHẾ ĐỘ TEST: CHỈ LẤY 2 BĐS VÀ SOI LOG CHI TIẾT")
+    print("🚀 BẮT ĐẦU CHẾ ĐỘ CÀO DIỆN RỘNG")
     
     da_xu_ly = 0
-    gioi_han = 2
+    trang_bat_dau = 1
+    trang_ket_thuc = 5 
 
-    res = curl_requests.get(base_url, impersonate="chrome", timeout=30)
-    soup = BeautifulSoup(res.content, 'html.parser')
-    cards = soup.select('div.re__card-full-compact, div.js__card')
-    
-    print(f"📋 Tìm thấy tổng cộng {len(cards)} tin trên trang 1.")
-
-    for card in cards:
-        if da_xu_ly >= gioi_han:
-            break
+    for page in range(trang_bat_dau, trang_ket_thuc + 1):
+        url_hien_tai = base_url if page == 1 else f"{base_url}/p{page}"
+        print(f"\n=======================================================")
+        print(f"🌍 ĐANG QUÉT TRANG {page}: {url_hien_tai}")
+        print(f"=======================================================")
 
         try:
-            link_tag = card.select_one('a.js__product-link-for-product-id')
-            if not link_tag: continue
-            detail_url = "https://batdongsan.com.vn" + link_tag['href']
+            res = curl_requests.get(url_hien_tai, impersonate="chrome", timeout=30)
+            if res.status_code != 200: continue
 
-            print(f"\n--- 🔎 ĐANG SOI TIN {da_xu_ly + 1}: {detail_url[-20:]} ---")
+            soup = BeautifulSoup(res.content, 'html.parser')
+            cards = soup.select('div.re__card-full-compact, div.js__card')
             
-            res_dt = curl_requests.get(detail_url, impersonate="chrome", timeout=30)
-            soup_dt = BeautifulSoup(res_dt.content, 'html.parser')
-            
-            # --- 1. SOI MÔ TẢ ---
-            desc_body = soup_dt.select_one('.re__section-body.re__detail-content.js__section-body, .re__detail-content, .js__section-body')
-            raw_desc = desc_body.get_text(separator="\n", strip=True) if desc_body else ""
-            if raw_desc:
-                print(f"📍 Mô tả: ✅ Đã lấy ({len(raw_desc)} ký tự).")
-            else:
-                print("📍 Mô tả: ❌ KHÔNG TÌM THẤY (Selector hỏng hoặc trang trống)!")
+            if not cards: break
 
-            # --- 2. SOI THÔNG SỐ (SPECS) ---
-            specs = soup_dt.select('.re__pr-specs-content-item')
-            raw_specs = "\n".join([s.get_text(strip=True) for s in specs])
-            
-            # --- 3. SOI ẢNH (VŨ KHÍ TỐI THƯỢNG REGEX) ---
-            raw_img_urls = []
-            
-            raw_html_text = res_dt.text 
-            cdn_links = re.findall(r'https?://file\d*\.batdongsan\.com\.vn/[^"\',;\s\\]+', raw_html_text)
-            
-            for link in cdn_links:
-                if link.lower().endswith(('.jpg', '.jpeg', '.png')):
-                    high_res = re.sub(r'/(crop|resize)/\d+x\d+/', '/resize/745x510/', link)
-                    if high_res not in raw_img_urls:
-                        raw_img_urls.append(high_res)
-            
-            if not raw_img_urls:
-                meta_img = soup_dt.find("meta", property="og:image")
-                if meta_img and meta_img.get("content"):
-                    raw_img_urls.append(meta_img.get("content"))
-            
-            raw_img_urls = raw_img_urls[:5]
-            print(f"📍 Ảnh: Đã nhặt được {len(raw_img_urls)} ảnh từ bài đăng.")
+            print(f"📋 Tìm thấy {len(cards)} tin trên trang {page}.")
 
-            # --- 4. GỬI AI ---
-            full_context = f"MÔ TẢ:\n{raw_desc}\n\nTHÔNG SỐ:\n{raw_specs}"
-            ai_data = ai_analyze_bds(card.select_one('h3').get_text(), full_context)
-            
-            if ai_data:
-                # 5. XỬ LÝ VÀ LƯU THỬ NGHIỆM
-                title = card.select_one('h3').get_text(strip=True)
-                
-                # [ĐÃ VÁ LỖI]: Ép slug sạch tiếng Việt bằng hàm tao_slug
-                slug = tao_slug(title)[:50] + "-" + str(int(time.time()))
-                
-                print("⏳ Đang nén và đưa ảnh lên Cloudinary...")
-                final_images = []
-                for idx, url in enumerate(raw_img_urls):
-                    img_slug = f"{slug}-img{idx}"
-                    up_url = process_image(url, img_slug)
-                    if up_url:
-                        final_images.append(up_url)
+            for card in cards:
+                link_tag = card.select_one('a.js__product-link-for-product-id')
+                if not link_tag: continue
+                detail_url = "https://batdongsan.com.vn" + link_tag['href']
+                title = card.select_one('h3').get_text(strip=True) if card.select_one('h3') else "Không tiêu đề"
 
-                data_to_save = {
-                    "tieu_de": title,
-                    "slug": slug,
-                    "gia": card.select_one('span.re__card-config-price').get_text(strip=True),
-                    "dien_tich": extract_number(card.select_one('span.re__card-config-area').get_text()),
-                    "loai_bds": ai_data.get("loai_bds", "Nhà đất"),
-                    "hinh_anh": final_images,
-                    "mo_ta": ai_data.get("html_clean"),
-                    "vi_tri_hien_thi": [detail_url]
-                }
+                print(f"\n--- 🔎 ĐANG SOI TIN: {title[:40]}... ---")
 
-                supabase.table("bds_ban").insert(data_to_save).execute()
-                print(f"✅ Đã lưu tin test {da_xu_ly + 1} vào Supabase với {len(final_images)} ảnh.")
-                da_xu_ly += 1
-            
-            time.sleep(10)
+                try:
+                    check_dup = supabase.table("bds_ban").select("id").eq("tieu_de", title).execute()
+                    if len(check_dup.data) > 0:
+                        print("⏭️ TIN ĐÃ TỒN TẠI. BỎ QUA!")
+                        continue
+                except Exception as e:
+                    pass
+
+                try:
+                    res_dt = curl_requests.get(detail_url, impersonate="chrome", timeout=30)
+                    soup_dt = BeautifulSoup(res_dt.content, 'html.parser')
+                    
+                    desc_body = soup_dt.select_one('.re__section-body.re__detail-content.js__section-body, .re__detail-content, .js__section-body')
+                    raw_desc = desc_body.get_text(separator="\n", strip=True) if desc_body else ""
+                    
+                    specs = soup_dt.select('.re__pr-specs-content-item')
+                    raw_specs = "\n".join([s.get_text(strip=True) for s in specs])
+                    
+                    raw_img_urls = []
+                    raw_html_text = res_dt.text 
+                    cdn_links = re.findall(r'https?://file\d*\.batdongsan\.com\.vn/[^"\',;\s\\]+', raw_html_text)
+                    
+                    for link in cdn_links:
+                        if link.lower().endswith(('.jpg', '.jpeg', '.png')):
+                            high_res = re.sub(r'/(crop|resize)/\d+x\d+', '', link)
+                            if high_res not in raw_img_urls:
+                                raw_img_urls.append(high_res)
+                    
+                    if not raw_img_urls:
+                        meta_img = soup_dt.find("meta", property="og:image")
+                        if meta_img and meta_img.get("content"):
+                            raw_img_urls.append(meta_img.get("content"))
+                    
+                    raw_img_urls = raw_img_urls[:5] 
+
+                    full_context = f"MÔ TẢ:\n{raw_desc}\n\nTHÔNG SỐ:\n{raw_specs}"
+                    ai_data = ai_analyze_bds(title, full_context)
+                    
+                    if ai_data:
+                        slug = tao_slug(title)[:50] + "-" + str(int(time.time()))
+                        
+                        print("⏳ Đang nén và đưa ảnh lên Cloudinary...")
+                        final_images = []
+                        for idx, url in enumerate(raw_img_urls):
+                            img_slug = f"{slug}-img{idx}"
+                            up_url = process_image(url, img_slug)
+                            if up_url:
+                                final_images.append(up_url)
+
+                        price_tag = card.select_one('span.re__card-config-price')
+                        area_tag = card.select_one('span.re__card-config-area')
+
+                        # [ĐÃ NÂNG CẤP]: Thêm các trường thông số bóc tách từ AI vào đây
+                        data_to_save = {
+                            "tieu_de": title,
+                            "slug": slug,
+                            "gia": price_tag.get_text(strip=True) if price_tag else "Thỏa thuận",
+                            "dien_tich": extract_number(area_tag.get_text()) if area_tag else 0,
+                            "loai_bds": ai_data.get("loai_bds", "land"),
+                            "phong_ngu": extract_number(ai_data.get("phong_ngu")) if ai_data.get("phong_ngu") else None,
+                            "phong_tam": extract_number(ai_data.get("phong_tam")) if ai_data.get("phong_tam") else None,
+                            "he_so_tang": str(ai_data.get("he_so_tang")) if ai_data.get("he_so_tang") else None,
+                            "huong_nha": ai_data.get("huong_nha"),
+                            "phap_ly": ai_data.get("phap_ly"),
+                            "hinh_anh": final_images,
+                            "mo_ta": ai_data.get("html_clean"),
+                            "vi_tri_hien_thi": [detail_url],
+                            "trang_thai": "Bản nháp"
+                        }
+
+                        supabase.table("bds_ban").insert(data_to_save).execute()
+                        da_xu_ly += 1
+                        print(f"✅ Đã lưu thành công tin thứ {da_xu_ly} (Trạng thái: BẢN NHÁP).")
+                    
+                    time.sleep(10)
+
+                except Exception as e:
+                    print(f"❌ Lỗi xử lý tin {title[:20]}...: {str(e)}")
+
+            print(f"Đã xong trang {page}. Đang nghỉ 20s...")
+            time.sleep(20)
 
         except Exception as e:
-            print(f"❌ Lỗi xử lý tin {da_xu_ly + 1}: {str(e)}")
+            print(f"❌ Lỗi khi quét trang {page}: {e}")
 
-    print(f"\n🎉 KẾT THÚC THỬ NGHIỆM. Tổng số tin đã soi: {da_xu_ly}")
+    print(f"\n🎉 KẾT THÚC CÀO DIỆN RỘNG. Tổng số tin đã lưu: {da_xu_ly}")
 
 if __name__ == "__main__":
     run_bot()
