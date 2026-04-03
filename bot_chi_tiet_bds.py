@@ -62,7 +62,6 @@ def process_image(url_goc, slug):
     try:
         if not url_goc: 
             return ""
-        
         res = curl_requests.get(url_goc, impersonate="chrome", timeout=20)
         img_data = io.BytesIO(res.content)
         
@@ -118,23 +117,28 @@ def run_bot():
             specs = soup_dt.select('.re__pr-specs-content-item')
             raw_specs = "\n".join([s.get_text(strip=True) for s in specs])
             
-            # --- 3. SOI ẢNH TỪ SLIDER (BẢN VÁ LỖI) ---
+            # --- 3. SOI ẢNH (VŨ KHÍ TỐI THƯỢNG REGEX) ---
             raw_img_urls = []
-            # Cào tất cả thẻ img nằm trong khung chứa hình ảnh (ưu tiên data-src để lấy ảnh xịn)
-            img_tags = soup_dt.select('.js__pr-image-item img, .re__pr-image-item img, swiper-slide img, .js__image-item img, .re__media-image img')
             
-            for img in img_tags:
-                src = img.get('data-src') or img.get('src')
-                if src and "http" in src and src not in raw_img_urls:
-                    raw_img_urls.append(src)
+            # Quét toàn bộ HTML thô để tìm các link CDN của Batdongsan (file1, file4...)
+            raw_html_text = res_dt.text 
+            cdn_links = re.findall(r'https?://file\d*\.batdongsan\.com\.vn/[^"\',;\s\\]+', raw_html_text)
             
-            # Nếu web đổi cấu trúc không lấy được slider, lúc đó mới dùng ảnh Meta dự phòng
+            for link in cdn_links:
+                # Lọc đuôi ảnh
+                if link.lower().endswith(('.jpg', '.jpeg', '.png')):
+                    # Mẹo: Ép các ảnh bị Batdongsan cắt nhỏ (crop/200x200) lên kích thước full HD (resize/745x510)
+                    high_res = re.sub(r'/(crop|resize)/\d+x\d+/', '/resize/745x510/', link)
+                    if high_res not in raw_img_urls:
+                        raw_img_urls.append(high_res)
+            
+            # Fallback an toàn: Nếu xui xẻo HTML khác biệt, vẫn cố nhặt thẻ meta
             if not raw_img_urls:
                 meta_img = soup_dt.find("meta", property="og:image")
                 if meta_img and meta_img.get("content"):
                     raw_img_urls.append(meta_img.get("content"))
             
-            # Giới hạn lấy 5 ảnh để không làm nặng hệ thống Cloudinary
+            # Giới hạn lấy 5 ảnh (1 ảnh bìa + 4 ảnh album) để không làm cháy server
             raw_img_urls = raw_img_urls[:5]
             print(f"📍 Ảnh: Đã nhặt được {len(raw_img_urls)} ảnh từ bài đăng.")
 
@@ -161,7 +165,7 @@ def run_bot():
                     "gia": card.select_one('span.re__card-config-price').get_text(strip=True),
                     "dien_tich": extract_number(card.select_one('span.re__card-config-area').get_text()),
                     "loai_bds": ai_data.get("loai_bds", "Nhà đất"),
-                    "hinh_anh": final_images, # Truyền cả mảng ảnh vào đây
+                    "hinh_anh": final_images,
                     "mo_ta": ai_data.get("html_clean"),
                     "vi_tri_hien_thi": [detail_url]
                 }
