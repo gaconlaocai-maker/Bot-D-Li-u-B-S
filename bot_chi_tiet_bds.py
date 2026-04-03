@@ -23,14 +23,15 @@ def extract_number(text):
     match = re.search(r'\d+', str(text).replace('.', '').replace(',', ''))
     return int(match.group()) if match else 0
 
-# ================= 2. AI BIÊN TẬP CHUYÊN SÂU (JSON MODE) =================
+# ================= 2. AI BIÊN TẬP (JSON MODE) =================
 def ai_analyze_bds(tieu_de, ngu_canh_tho):
+    print(f"🤖 Đang gửi dữ liệu thô sang AI (Độ dài: {len(ngu_canh_tho)} ký tự)...")
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     
     prompt = (
-        f"Bạn là chuyên gia marketing BĐS Lào Cai. Hãy đọc bài đăng và trả về JSON.\n"
-        f"YÊU CẦU: Viết lại HTML sạch (<p>, <ul>, <li>), xóa sạch SĐT/tên môi giới.\n"
+        f"Bạn là chuyên gia BĐS Lào Cai. Hãy đọc bài đăng và trả về JSON.\n"
+        f"Yêu cầu: Viết lại HTML sạch (<p>, <ul>, <li>), xóa sạch SĐT/tên môi giới.\n"
         f"Nội dung thô: {ngu_canh_tho}"
     )
     
@@ -43,16 +44,19 @@ def ai_analyze_bds(tieu_de, ngu_canh_tho):
     
     try:
         res = requests.post(url, headers=headers, json=payload, timeout=30)
-        return json.loads(res.json()['choices'][0]['message']['content'])
+        ai_res = json.loads(res.json()['choices'][0]['message']['content'])
+        print("✅ AI đã xử lý xong và trả về JSON.")
+        return ai_res
     except Exception as e:
         print(f"⚠️ Lỗi AI Groq: {str(e)}")
         return None
 
-# ================= 3. XỬ LÝ HÌNH ẢNH (NÂNG CẤP ĐA LỚP) =================
+# ================= 3. XỬ LÝ HÌNH ẢNH =================
 def process_image(url_goc, slug):
     try:
-        if not url_goc or "base64" in url_goc: return ""
-        # Thêm Header giả trình duyệt để tải ảnh không bị chặn
+        if not url_goc: 
+            print("📍 Ảnh: ❌ Không có URL để xử lý.")
+            return ""
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0 Safari/537.36'}
         res = requests.get(url_goc, headers=headers, timeout=20)
         img_data = io.BytesIO(res.content)
@@ -62,97 +66,99 @@ def process_image(url_goc, slug):
             rgb_img.save(buffer, format="WEBP", quality=75)
             buffer.seek(0)
             up = cloudinary.uploader.upload(buffer, folder="sapa_bds", public_id=slug)
+            print(f"📍 Ảnh: ✅ Đã nén và tải lên Cloudinary ({up['secure_url'][:50]}...)")
             return up['secure_url']
     except Exception as e:
-        print(f"⚠️ Lỗi xử lý ảnh Cloudinary: {str(e)}")
-        return url_goc # Fallback dùng link gốc
+        print(f"⚠️ Lỗi xử lý ảnh: {str(e)}")
+        return url_goc
 
-# ================= 4. QUY TRÌNH QUÉT DỮ LIỆU TỔNG LỰC =================
+# ================= 4. QUY TRÌNH QUÉT THỬ NGHIỆM (2 TIN) =================
 def run_bot():
     base_url = "https://batdongsan.com.vn/nha-dat-ban-sa-pa-lca"
-    print("🚀 BẮT ĐẦU CHIẾN DỊCH QUÉT SÂU BĐS SA PA (Bản sửa lỗi Ảnh)...")
+    print("🚀 BẮT ĐẦU CHẾ ĐỘ TEST: CHỈ LẤY 2 BĐS VÀ SOI LOG CHI TIẾT")
+    
+    da_xu_ly = 0
+    gioi_han = 2
 
-    for page in range(1, 4): # Quét sạch 3 trang danh sách
-        url = base_url if page == 1 else f"{base_url}/p{page}"
+    res = curl_requests.get(base_url, impersonate="chrome", timeout=30)
+    soup = BeautifulSoup(res.content, 'html.parser')
+    cards = soup.select('div.re__card-full-compact, div.js__card')
+    
+    print(f"📋 Tìm thấy tổng cộng {len(cards)} tin trên trang 1.")
+
+    for card in cards:
+        if da_xu_ly >= gioi_han:
+            break
+
         try:
-            res = curl_requests.get(url, impersonate="chrome", timeout=30)
-            soup = BeautifulSoup(res.content, 'html.parser')
-            cards = soup.select('div.re__card-full-compact, div.js__card')
+            link_tag = card.select_one('a.js__product-link-for-product-id')
+            if not link_tag: continue
+            detail_url = "https://batdongsan.com.vn" + link_tag['href']
+
+            print(f"\n--- 🔎 ĐANG SOI TIN {da_xu_ly + 1}: {detail_url[-20:]} ---")
             
-            print(f"\n📄 TRANG {page}: Tìm thấy {len(cards)} bài đăng.")
+            res_dt = curl_requests.get(detail_url, impersonate="chrome", timeout=30)
+            soup_dt = BeautifulSoup(res_dt.content, 'html.parser')
+            
+            # --- 1. SOI MÔ TẢ ---
+            desc_body = soup_dt.select_one('.re__section-body.re__detail-content.js__section-body, .re__detail-content, .js__section-body')
+            raw_desc = desc_body.get_text(separator="\n", strip=True) if desc_body else ""
+            if raw_desc:
+                print(f"📍 Mô tả: ✅ Đã lấy ({len(raw_desc)} ký tự). Đoạn đầu: {raw_desc[:50]}...")
+            else:
+                print("📍 Mô tả: ❌ KHÔNG TÌM THẤY (Selector hỏng hoặc trang trống)!")
 
-            for card in cards:
-                try:
-                    link_tag = card.select_one('a.js__product-link-for-product-id')
-                    if not link_tag: continue
-                    detail_url = "https://batdongsan.com.vn" + link_tag['href']
+            # --- 2. SOI THÔNG SỐ (SPECS) ---
+            specs = soup_dt.select('.re__pr-specs-content-item')
+            print(f"📍 Thông số: Tìm thấy {len(specs)} mục.")
+            raw_specs = "\n".join([s.get_text(strip=True) for s in specs])
+            
+            # --- 3. SOI ẢNH ---
+            img_url = ""
+            meta_img = soup_dt.find("meta", property="og:image")
+            if meta_img:
+                img_url = meta_img.get("content")
+                print(f"📍 Ảnh (Meta): ✅ Tìm thấy: {img_url[:50]}...")
+            
+            if not img_url:
+                img_tag = soup_dt.select_one('.re__pr-image-item img, .re__pr-image-item-main img, .js__pr-image-item img')
+                if img_tag:
+                    img_url = img_tag.get('data-src') or img_tag.get('src') or ""
+                    print(f"📍 Ảnh (Carousel): ✅ Tìm thấy: {img_url[:50]}...")
+                else:
+                    print("📍 Ảnh: ❌ KHÔNG TÌM THẤY TRONG THẺ HTML!")
 
-                    # Kiểm tra trùng lặp trên Supabase
-                    check = supabase.table("bds_ban").select("id").contains("vi_tri_hien_thi", [detail_url]).execute()
-                    if len(check.data) > 0: continue
+            # --- 4. GỬI AI ---
+            full_context = f"MÔ TẢ:\n{raw_desc}\n\nTHÔNG SỐ:\n{raw_specs}"
+            ai_data = ai_analyze_bds(card.select_one('h3').get_text(), full_context)
+            
+            if ai_data:
+                # 5. LƯU THỬ NGHIỆM
+                title = card.select_one('h3').get_text(strip=True)
+                slug = re.sub(r'\W+', '-', title.lower())[:50] + "-" + str(int(time.time()))
+                final_img = process_image(img_url, slug)
 
-                    print(f"🔍 Đang xử lý: {detail_url[-15:]}")
-                    res_dt = curl_requests.get(detail_url, impersonate="chrome", timeout=30)
-                    soup_dt = BeautifulSoup(res_dt.content, 'html.parser')
-                    
-                    # 1. LẤY MÔ TẢ & THÔNG SỐ (Selectors đã test OK trong log của bạn)
-                    desc_body = soup_dt.select_one('.re__section-body.re__detail-content.js__section-body, .re__detail-content, .js__section-body')
-                    raw_desc = desc_body.get_text(separator="\n", strip=True) if desc_body else ""
-                    
-                    specs = soup_dt.select('.re__pr-specs-content-item')
-                    raw_specs = "\n".join([s.get_text(strip=True) for s in specs])
-                    
-                    # 2. LẤY ẢNH (BỘ LỌC ĐA ĐIỂM - SỬA LỖI ❌)
-                    img_url = ""
-                    # Ưu tiên lấy từ thẻ Meta SEO (luôn có ảnh đại diện bài viết)
-                    meta_img = soup_dt.find("meta", property="og:image")
-                    if meta_img:
-                        img_url = meta_img.get("content")
-                    
-                    # Nếu meta không có, quét sâu vào Carousel
-                    if not img_url:
-                        img_tag = soup_dt.select_one('.re__pr-image-item img, .re__pr-image-item-main img, .js__pr-image-item img, .re__pr-image-item-main img')
-                        if img_tag:
-                            img_url = img_tag.get('data-src') or img_tag.get('data-original') or img_tag.get('src') or ""
+                data_to_save = {
+                    "tieu_de": title,
+                    "slug": slug,
+                    "gia": card.select_one('span.re__card-config-price').get_text(strip=True),
+                    "dien_tich": extract_number(card.select_one('span.re__card-config-area').get_text()),
+                    "loai_bds": ai_data.get("loai_bds", "Nhà đất"),
+                    "hinh_anh": [final_img] if final_img else [],
+                    "mo_ta": ai_data.get("html_clean"),
+                    "vi_tri_hien_thi": [detail_url]
+                }
 
-                    # 3. AI BIÊN TẬP
-                    full_context = f"MÔ TẢ:\n{raw_desc}\n\nTHÔNG SỐ:\n{raw_specs}"
-                    ai_data = ai_analyze_bds(card.select_one('h3').get_text(), full_context)
-                    if not ai_data: continue
+                supabase.table("bds_ban").insert(data_to_save).execute()
+                print(f"✅ Đã lưu tin test {da_xu_ly + 1} vào Supabase.")
+                da_xu_ly += 1
+            
+            time.sleep(10)
 
-                    # 4. XỬ LÝ ẢNH & SLUG
-                    title = card.select_one('h3').get_text(strip=True)
-                    slug = re.sub(r'\W+', '-', title.lower())[:50] + "-" + str(int(time.time()))
-                    final_img = process_image(img_url, slug)
-
-                    # 5. LƯU DATABASE
-                    data_to_save = {
-                        "tieu_de": title,
-                        "slug": slug,
-                        "gia": card.select_one('span.re__card-config-price').get_text(strip=True),
-                        "dien_tich": extract_number(card.select_one('span.re__card-config-area').get_text()),
-                        "vi_tri": "Sa Pa, Lào Cai",
-                        "loai_bds": ai_data.get("loai_bds", "Nhà đất"),
-                        "hinh_anh": [final_img] if final_img else [],
-                        "mo_ta": ai_data.get("html_clean", "Nội dung đang cập nhật"),
-                        "phap_ly": ai_data.get("phap_ly") or "Sổ đỏ/Sổ hồng",
-                        "huong_nha": ai_data.get("huong_nha"),
-                        "phong_ngu": extract_number(ai_data.get("phong_ngu")),
-                        "phong_tam": extract_number(ai_data.get("phong_tam")),
-                        "meta_title": ai_data.get("meta_title"),
-                        "meta_desc": ai_data.get("meta_desc"),
-                        "vi_tri_hien_thi": [detail_url]
-                    }
-
-                    supabase.table("bds_ban").insert(data_to_save).execute()
-                    print(f"✅ Thành công: {title[:30]}...")
-                    time.sleep(15)
-
-                except Exception as e:
-                    print(f"❌ Lỗi xử lý bài: {str(e)}")
-                    continue
         except Exception as e:
-            print(f"❌ Lỗi trang {page}: {str(e)}")
+            print(f"❌ Lỗi xử lý tin {da_xu_ly + 1}: {str(e)}")
+
+    print(f"\n🎉 KẾT THÚC THỬ NGHIỆM. Tổng số tin đã soi: {da_xu_ly}")
 
 if __name__ == "__main__":
     run_bot()
