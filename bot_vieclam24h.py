@@ -97,7 +97,7 @@ def run_bot():
     except Exception as e:
         print(f"⚠️ Lỗi tải khiên: {e}")
 
-    base_url = "https://vieclam24h.vn/viec-lam-lao-cai-c59.html"
+    base_url = "https://vieclam24h.vn/viec-lam-lao-cai-p78.html"
     da_xu_ly = 0
 
     for page in range(1, 4): # Quét 3 trang đầu
