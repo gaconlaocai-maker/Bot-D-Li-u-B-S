@@ -64,11 +64,11 @@ def ai_analyze_bds(tieu_de, ngu_canh_tho):
         f"--- Mô tả gốc: {ngu_canh_tho}"
     )
     
-    # Băng đạn AI với 3 con mạnh nhất theo thứ tự ưu tiên
+    # Băng đạn AI (Đã cập nhật mã API ID chuẩn xác nhất từ Docs)
     danh_sach_models = [
-        "gpt-oss-120b",
-        "llama-4-scout",
-        "llama-3.3-70b-versatile"
+        "openai/gpt-oss-120b",
+        "llama-3.3-70b-versatile",
+        "openai/gpt-oss-20b"
     ]
 
     for model_name in danh_sach_models:
