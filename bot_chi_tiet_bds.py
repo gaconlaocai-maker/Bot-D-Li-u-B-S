@@ -18,10 +18,14 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 supabase = create_client(os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_KEY"))
 cloudinary.config(cloudinary_url=os.environ.get("CLOUDINARY_URL"))
 
+# [ĐÃ FIX]: Regex lấy chính xác số thập phân, tránh biến 50.5 thành 505
 def extract_number(text):
     if not text: return 0
-    match = re.search(r'\d+', str(text).replace('.', '').replace(',', ''))
-    return int(match.group()) if match else 0
+    match = re.search(r'\d+([.,]\d+)?', str(text))
+    if match:
+        num_str = match.group().replace(',', '.')
+        return float(num_str)
+    return 0
 
 # ================= 2. AI BIÊN TẬP (JSON MODE) =================
 def ai_analyze_bds(tieu_de, ngu_canh_tho):
@@ -29,9 +33,13 @@ def ai_analyze_bds(tieu_de, ngu_canh_tho):
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     
+    # [ĐÃ FIX]: Ép AI trả về đúng cấu trúc JSON với 2 Key rõ ràng
     prompt = (
-        f"Bạn là chuyên gia BĐS Lào Cai. Hãy đọc bài đăng và trả về JSON.\n"
-        f"Yêu cầu: Viết lại HTML sạch (<p>, <ul>, <li>), xóa sạch SĐT/tên môi giới.\n"
+        f"Bạn là chuyên gia BĐS Lào Cai. Hãy đọc bài đăng thô và trả về ĐÚNG định dạng JSON sau:\n"
+        f"{{\n"
+        f"  \"loai_bds\": \"Phân loại BĐS (vd: Nhà riêng, Đất nền, Biệt thự, Căn hộ...)\",\n"
+        f"  \"html_clean\": \"Viết lại nội dung bằng mã HTML sạch (<p>, <ul>, <li>), TUYỆT ĐỐI XÓA SẠCH SĐT, link và tên môi giới\"\n"
+        f"}}\n\n"
         f"Nội dung thô: {ngu_canh_tho}"
     )
     
@@ -57,9 +65,11 @@ def process_image(url_goc, slug):
         if not url_goc: 
             print("📍 Ảnh: ❌ Không có URL để xử lý.")
             return ""
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0 Safari/537.36'}
-        res = requests.get(url_goc, headers=headers, timeout=20)
+        
+        # [ĐÃ FIX]: Dùng curl_requests thay vì requests để vượt qua CDN/Cloudflare chặn tải ảnh
+        res = curl_requests.get(url_goc, impersonate="chrome", timeout=20)
         img_data = io.BytesIO(res.content)
+        
         with Image.open(img_data) as img:
             rgb_img = img.convert("RGB")
             buffer = io.BytesIO()
