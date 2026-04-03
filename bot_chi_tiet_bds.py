@@ -40,22 +40,17 @@ def tao_slug(s):
     s = re.sub(r'\s+', '-', s)
     return re.sub(r'-+', '-', s).strip('-')
 
-# ================= 2. AI BIÊN TẬP & BÓC TÁCH THÔNG SỐ =================
+# ================= 2. AI BIÊN TẬP (GIẢM TẢI CHO AI) =================
 def ai_analyze_bds(tieu_de, ngu_canh_tho):
-    print(f"🤖 Đang gửi dữ liệu thô sang AI (Độ dài: {len(ngu_canh_tho)} ký tự)...")
+    print(f"🤖 Đang gửi mô tả sang AI (Độ dài: {len(ngu_canh_tho)} ký tự)...")
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     
-    # [ĐÃ NÂNG CẤP]: Ép AI bóc tách chi tiết thông số kỹ thuật
+    # [ĐÃ TỐI ƯU]: AI giờ chỉ cần lo phân loại và viết lại HTML cho mượt, không cần tìm thông số nữa
     prompt = (
         f"Bạn là chuyên gia BĐS Lào Cai. Hãy đọc bài đăng thô và trả về ĐÚNG định dạng JSON sau:\n"
         f"{{\n"
-        f"  \"loai_bds\": \"Phân loại (vd: villa, hotel, land, nhà phố...)\",\n"
-        f"  \"phong_ngu\": \"Chỉ trả về con số (vd: 10). Nếu không thấy trả về null\",\n"
-        f"  \"phong_tam\": \"Chỉ trả về con số (vd: 12). Nếu không thấy trả về null\",\n"
-        f"  \"he_so_tang\": \"Chỉ trả về con số (vd: 3). Nếu không thấy trả về null\",\n"
-        f"  \"huong_nha\": \"(vd: Bắc, Đông Nam...). Nếu không thấy trả về null\",\n"
-        f"  \"phap_ly\": \"(vd: Sổ đỏ, Sổ hồng...). Nếu không thấy trả về null\",\n"
+        f"  \"loai_bds\": \"Phân loại BĐS (vd: villa, hotel, land, nhà phố...)\",\n"
         f"  \"html_clean\": \"Viết lại nội dung mô tả BĐS bằng mã HTML sạch (<p>, <ul>, <li>), TUYỆT ĐỐI XÓA SẠCH SĐT, link và tên môi giới\"\n"
         f"}}\n\n"
         f"Nội dung thô: {ngu_canh_tho}"
@@ -71,7 +66,7 @@ def ai_analyze_bds(tieu_de, ngu_canh_tho):
     try:
         res = requests.post(url, headers=headers, json=payload, timeout=30)
         ai_res = json.loads(res.json()['choices'][0]['message']['content'])
-        print("✅ AI đã bóc tách thông số và xử lý nội dung xong.")
+        print("✅ AI đã xử lý nội dung xong.")
         return ai_res
     except Exception as e:
         print(f"⚠️ Lỗi AI Groq: {str(e)}")
@@ -100,7 +95,7 @@ def process_image(url_goc, slug):
 # ================= 4. QUY TRÌNH QUÉT CHÍNH (ĐA TRANG) =================
 def run_bot():
     base_url = "https://batdongsan.com.vn/nha-dat-ban-sa-pa-lca"
-    print("🚀 BẮT ĐẦU CHẾ ĐỘ CÀO DIỆN RỘNG")
+    print("🚀 BẮT ĐẦU CHẾ ĐỘ CÀO DIỆN RỘNG (KẾT HỢP BÓC TÁCH BẢNG)")
     
     da_xu_ly = 0
     trang_bat_dau = 1
@@ -146,9 +141,17 @@ def run_bot():
                     desc_body = soup_dt.select_one('.re__section-body.re__detail-content.js__section-body, .re__detail-content, .js__section-body')
                     raw_desc = desc_body.get_text(separator="\n", strip=True) if desc_body else ""
                     
-                    specs = soup_dt.select('.re__pr-specs-content-item')
-                    raw_specs = "\n".join([s.get_text(strip=True) for s in specs])
+                    # [ĐÃ NÂNG CẤP]: Bóc tách trực tiếp bằng Code từ bảng "Đặc điểm bất động sản"
+                    dic_thong_so = {}
+                    bang_thong_so = soup_dt.select('.re__pr-specs-content-item')
+                    for item in bang_thong_so:
+                        tieu_de_ts = item.select_one('.re__pr-specs-content-item-title')
+                        gia_tri_ts = item.select_one('.re__pr-specs-content-item-value')
+                        if tieu_de_ts and gia_tri_ts:
+                            dic_thong_so[tieu_de_ts.get_text(strip=True)] = gia_tri_ts.get_text(strip=True)
                     
+                    print(f"📍 Đã bóc trực tiếp từ Bảng: {dic_thong_so}")
+
                     raw_img_urls = []
                     raw_html_text = res_dt.text 
                     cdn_links = re.findall(r'https?://file\d*\.batdongsan\.com\.vn/[^"\',;\s\\]+', raw_html_text)
@@ -166,8 +169,8 @@ def run_bot():
                     
                     raw_img_urls = raw_img_urls[:5] 
 
-                    full_context = f"MÔ TẢ:\n{raw_desc}\n\nTHÔNG SỐ:\n{raw_specs}"
-                    ai_data = ai_analyze_bds(title, full_context)
+                    # Gửi AI để làm sạch HTML
+                    ai_data = ai_analyze_bds(title, raw_desc)
                     
                     if ai_data:
                         slug = tao_slug(title)[:50] + "-" + str(int(time.time()))
@@ -183,18 +186,18 @@ def run_bot():
                         price_tag = card.select_one('span.re__card-config-price')
                         area_tag = card.select_one('span.re__card-config-area')
 
-                        # [ĐÃ NÂNG CẤP]: Thêm các trường thông số bóc tách từ AI vào đây
+                        # Ánh xạ từ Dictionary vừa bóc được vào Supabase
                         data_to_save = {
                             "tieu_de": title,
                             "slug": slug,
                             "gia": price_tag.get_text(strip=True) if price_tag else "Thỏa thuận",
                             "dien_tich": extract_number(area_tag.get_text()) if area_tag else 0,
                             "loai_bds": ai_data.get("loai_bds", "land"),
-                            "phong_ngu": extract_number(ai_data.get("phong_ngu")) if ai_data.get("phong_ngu") else None,
-                            "phong_tam": extract_number(ai_data.get("phong_tam")) if ai_data.get("phong_tam") else None,
-                            "he_so_tang": str(ai_data.get("he_so_tang")) if ai_data.get("he_so_tang") else None,
-                            "huong_nha": ai_data.get("huong_nha"),
-                            "phap_ly": ai_data.get("phap_ly"),
+                            "phong_ngu": extract_number(dic_thong_so.get("Số phòng ngủ")) if dic_thong_so.get("Số phòng ngủ") else None,
+                            "phong_tam": extract_number(dic_thong_so.get("Số phòng tắm, vệ sinh")) if dic_thong_so.get("Số phòng tắm, vệ sinh") else None,
+                            "he_so_tang": str(extract_number(dic_thong_so.get("Số tầng"))) if dic_thong_so.get("Số tầng") else None,
+                            "huong_nha": dic_thong_so.get("Hướng nhà", None),
+                            "phap_ly": dic_thong_so.get("Pháp lý", None),
                             "hinh_anh": final_images,
                             "mo_ta": ai_data.get("html_clean"),
                             "vi_tri_hien_thi": [detail_url],
