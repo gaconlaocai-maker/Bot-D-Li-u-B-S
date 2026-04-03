@@ -106,15 +106,25 @@ def run_bot():
         
         try:
             res = curl_requests.get(url_page, impersonate="chrome", timeout=30)
+            
+            # Khúc này em gắn thêm còi báo động, nếu thật sự bị Cloudflare chặn nó sẽ hú lên cho sếp biết
+            if res.status_code != 200:
+                print(f"⚠️ Web từ chối truy cập (Mã lỗi {res.status_code}). Đang bị bot-protection chặn!")
+                continue
+
             soup = BeautifulSoup(res.content, 'html.parser')
             
-            # Tìm tất cả các thẻ a có chứa /tuyen-dung/
+            # --- ĐOẠN ĐÃ SỬA LẠI ĐỂ TÓM ĐÚNG LINK CỦA VL24H ---
             links = []
             for a in soup.find_all('a', href=True):
-                href = a['href']
-                if '/tuyen-dung/' in href and href.endswith('.html'):
+                # Bỏ cái mớ bòng bong ?open_from= tracking phía sau link
+                href = a['href'].split('?')[0] 
+                
+                # Bắt đúng link có chứa "id + dãy số + .html" (Đặc sản cấu trúc link mới của VL24h)
+                if re.search(r'id\d+\.html$', href) and 'danh-sach-tin-tuyen-dung' not in href:
                     full_link = "https://vieclam24h.vn" + href if href.startswith('/') else href
                     if full_link not in links: links.append(full_link)
+            # ----------------------------------------------------
 
             print(f"📋 Tìm thấy {len(links)} tin trên trang {page}.")
 
@@ -141,7 +151,7 @@ def run_bot():
                         tieu_de = ai_data.get("tieu_de_moi", "Tuyển dụng Việc làm Lào Cai")
                         slug = tao_slug(tieu_de)[:50] + "-" + str(int(time.time()))
                         so_luong = ai_data.get("so_luong")
-                        if isinstance(so_luong, str) and not so_luong.isdigit(): so_luong = 1
+                        if isinstance(so_luong, str) and not str(so_luong).isdigit(): so_luong = 1
 
                         data_to_save = {
                             "tieu_de": tieu_de,
