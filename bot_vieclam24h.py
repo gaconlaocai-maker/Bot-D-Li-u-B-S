@@ -1,5 +1,6 @@
 import os, sys, re, time, requests, json
 from supabase import create_client
+from playwright.sync_api import sync_playwright
 
 # ================= 1. CẤU HÌNH HỆ THỐNG =================
 def check_config():
@@ -34,7 +35,6 @@ def tao_slug(s):
     s = re.sub(r'\s+', '-', s)
     return re.sub(r'-+', '-', s).strip('-')
 
-# ================= 2. AI BIÊN TẬP =================
 def ai_analyze_job(text_tho):
     if len(text_tho) < 50: return None
     print(f"🤖 Đang nhờ AI tút tát lại nội dung...")
@@ -66,9 +66,9 @@ def ai_analyze_job(text_tho):
             except: continue 
     return None
 
-# ================= 3. QUY TRÌNH HÚT DATA =================
+# ================= 3. QUY TRÌNH HÚT DATA & CLICK LẤY SỐ =================
 def run_bot():
-    print("🚀 BẮT ĐẦU CÀO DATA VÀ TRUY LÙNG SĐT")
+    print("🚀 BẮT ĐẦU CÀO DATA VÀ ÉP CHỢ TỐT NHẢ SĐT THẬT")
     
     danh_sach_link_cu = set()
     try:
@@ -81,79 +81,121 @@ def run_bot():
     api_list = "https://gateway.chotot.com/v1/public/ad-listing?cg=13000&q=Lào%20Cai&limit=20"
     da_xu_ly = 0
 
-    try:
-        res = requests.get(api_list, timeout=10)
-        ads = res.json().get('ads', [])
-        print(f"📋 Tìm thấy {len(ads)} tin.")
-
-        headers_chotot = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            "Cookie": CHOTOT_COOKIE
-        }
-
-        for ad in ads:
-            list_id = ad.get('list_id')
-            detail_url = f"https://vieclam.chotot.com/viec-lam/{list_id}.htm"
-            
-            if detail_url in danh_sach_link_cu:
-                continue
-
-            print(f"\n--- 🔎 ĐANG SOI: {ad.get('subject')} ---")
-            
-            api_detail = f"https://gateway.chotot.com/v1/public/ad-listing/{list_id}"
-            res_dt = requests.get(api_detail, headers=headers_chotot, timeout=10)
-            ad_dt = res_dt.json().get('ad', {})
-            
-            text_tho = ad_dt.get('body', '')
-            hinh_anh = [ad_dt.get('image')] if ad_dt.get('image') else []
-            
-            # -- THUẬT TOÁN SĂN SĐT TỐI ƯU --
-            so_dien_thoai = ""
-            # 1. Quét thẳng vào mô tả trước (Ưu tiên lấy số 10 số liền nhau do HR tự gõ)
-            text_clean = text_tho.replace('.', '').replace(' ', '').replace('-', '')
-            phone_match = re.search(r'(0[3|5|7|8|9][0-9]{8})', text_clean)
-            
-            if phone_match:
-                so_dien_thoai = phone_match.group(1)
-                print(f"   🎯 Bắt được SĐT thật trong mô tả: {so_dien_thoai}")
-            else:
-                # 2. Nếu không có, đành lấy số bị che từ API
-                so_dien_thoai = ad_dt.get('phone', '')
-                print(f"   ⚠️ Lấy SĐT từ API: {so_dien_thoai}")
-
-            tieu_de = ad_dt.get('subject', 'Tuyển dụng Lào Cai')
-            muc_luong = ad_dt.get('price_string', 'Thỏa thuận')
-            cong_ty = ad_dt.get('company_name', 'Đang cập nhật')
-            dia_diem = ad_dt.get('area_name', 'Lào Cai')
-            
-            ai_data = ai_analyze_job(text_tho)
-            
-            if ai_data:
-                slug = tao_slug(tieu_de)[:50] + "-" + str(int(time.time()))
-                so_luong = ai_data.get("so_luong")
-                if isinstance(so_luong, str) and not str(so_luong).isdigit(): so_luong = 1
-
-                data_to_save = {
-                    "tieu_de": tieu_de, "slug": slug, "cong_ty": cong_ty,
-                    "muc_luong": muc_luong, "vi_tri": dia_diem, 
-                    "so_dien_thoai": so_dien_thoai, # LƯU VÀO KÉT
-                    "hinh_thuc": "Full-time", "kinh_nghiem": ai_data.get("kinh_nghiem", "Không yêu cầu"),
-                    "so_luong": int(so_luong) if so_luong else 1, "han_nop": ai_data.get("han_nop", "Đang mở"),
-                    "nhan_fomo": ai_data.get("nhan_fomo", ""), "hinh_anh": hinh_anh,
-                    "mo_ta": ai_data.get("html_clean", text_tho), "link_goc": detail_url, "trang_thai": "Chờ duyệt"
-                }
-
-                supabase.table("viec_lam").insert(data_to_save).execute()
-                danh_sach_link_cu.add(detail_url)
-                da_xu_ly += 1
-                print(f"✅ ĐÃ LƯU!")
+    # Khởi động cỗ máy Click tự động
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        )
+        
+        # Nhét Cookie vào để lách cửa bảo vệ
+        if CHOTOT_COOKIE:
+            cookies = []
+            for item in CHOTOT_COOKIE.split(';'):
+                if '=' in item:
+                    k, v = item.strip().split('=', 1)
+                    cookies.append({
+                        "name": k,
+                        "value": v,
+                        "domain": ".chotot.com",
+                        "path": "/"
+                    })
+            if cookies:
+                context.add_cookies(cookies)
                 
-            time.sleep(1.5) 
-            
-    except Exception as e:
-        print(f"❌ Lỗi: {str(e)}")
+        page = context.new_page()
 
-    print(f"\n🎉 XONG! Thu hoạch: {da_xu_ly} jobs.")
+        try:
+            res = requests.get(api_list, timeout=10)
+            ads = res.json().get('ads', [])
+            print(f"📋 Tìm thấy {len(ads)} tin.")
+
+            headers_chotot = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                "Cookie": CHOTOT_COOKIE
+            }
+
+            for ad in ads:
+                list_id = ad.get('list_id')
+                
+                # ĐÃ FIX LỖI CHẾT LINK: Đổi tên miền về thẳng www.chotot.com
+                detail_url = f"https://www.chotot.com/{list_id}.htm"
+                
+                if detail_url in danh_sach_link_cu:
+                    continue
+
+                print(f"\n--- 🔎 ĐANG SOI: {ad.get('subject')} ---")
+                
+                api_detail = f"https://gateway.chotot.com/v1/public/ad-listing/{list_id}"
+                res_dt = requests.get(api_detail, headers=headers_chotot, timeout=10)
+                ad_dt = res_dt.json().get('ad', {})
+                
+                text_tho = ad_dt.get('body', '')
+                hinh_anh = [ad_dt.get('image')] if ad_dt.get('image') else []
+                
+                so_dien_thoai = ""
+                # 1. Quét thẳng vào mô tả trước
+                text_clean = text_tho.replace('.', '').replace(' ', '').replace('-', '')
+                phone_match = re.search(r'(0[3|5|7|8|9][0-9]{8})', text_clean)
+                
+                if phone_match:
+                    so_dien_thoai = phone_match.group(1)
+                    print(f"   🎯 Bắt được SĐT thật trong mô tả: {so_dien_thoai}")
+                else:
+                    # 2. Nhả Robot vào trình duyệt để CLICK NÚT LẤY SỐ
+                    print("   🤖 Đang thả Robot vào web để click nút lấy SĐT...")
+                    try:
+                        page.goto(detail_url, wait_until="domcontentloaded", timeout=20000)
+                        page.wait_for_timeout(2000)
+                        
+                        btn = page.locator('text="Nhấn để hiện số"')
+                        if btn.count() > 0:
+                            btn.first.click(timeout=5000)
+                            page.wait_for_timeout(1500) # Đợi nhả số
+                            
+                        # Sau khi click, lấy SĐT từ thuộc tính tel:
+                        tel_links = page.locator('a[href^="tel:"]')
+                        if tel_links.count() > 0:
+                            so_dien_thoai = tel_links.first.get_attribute('href').replace('tel:', '').replace(' ', '')
+                            print(f"   ✅ Robot click thành công, chốt SĐT thật: {so_dien_thoai}")
+                        else:
+                            so_dien_thoai = ad_dt.get('phone', '')
+                            print(f"   ⚠️ Robot bó tay, lấy SĐT ẩn: {so_dien_thoai}")
+                    except Exception as e:
+                        so_dien_thoai = ad_dt.get('phone', '')
+                        print(f"   ⚠️ Lỗi Robot, lấy SĐT ẩn: {so_dien_thoai}")
+
+                tieu_de = ad_dt.get('subject', 'Tuyển dụng Lào Cai')
+                muc_luong = ad_dt.get('price_string', 'Thỏa thuận')
+                cong_ty = ad_dt.get('company_name', 'Đang cập nhật')
+                dia_diem = ad_dt.get('area_name', 'Lào Cai')
+                
+                ai_data = ai_analyze_job(text_tho)
+                
+                if ai_data:
+                    slug = tao_slug(tieu_de)[:50] + "-" + str(int(time.time()))
+                    so_luong = ai_data.get("so_luong")
+                    if isinstance(so_luong, str) and not str(so_luong).isdigit(): so_luong = 1
+
+                    data_to_save = {
+                        "tieu_de": tieu_de, "slug": slug, "cong_ty": cong_ty,
+                        "muc_luong": muc_luong, "vi_tri": dia_diem, 
+                        "so_dien_thoai": so_dien_thoai, 
+                        "hinh_thuc": "Full-time", "kinh_nghiem": ai_data.get("kinh_nghiem", "Không yêu cầu"),
+                        "so_luong": int(so_luong) if so_luong else 1, "han_nop": ai_data.get("han_nop", "Đang mở"),
+                        "nhan_fomo": ai_data.get("nhan_fomo", ""), "hinh_anh": hinh_anh,
+                        "mo_ta": ai_data.get("html_clean", text_tho), "link_goc": detail_url, "trang_thai": "Chờ duyệt"
+                    }
+
+                    supabase.table("viec_lam").insert(data_to_save).execute()
+                    danh_sach_link_cu.add(detail_url)
+                    da_xu_ly += 1
+                    print(f"✅ ĐÃ LƯU THÀNH CÔNG!")
+                    
+        except Exception as e:
+            print(f"❌ Lỗi: {str(e)}")
+
+        print(f"\n🎉 XONG! Thu hoạch: {da_xu_ly} jobs.")
 
 if __name__ == "__main__":
     run_bot()
