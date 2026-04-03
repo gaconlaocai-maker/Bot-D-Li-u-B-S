@@ -18,13 +18,14 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 supabase = create_client(os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_KEY"))
 cloudinary.config(cloudinary_url=os.environ.get("CLOUDINARY_URL"))
 
-# [ĐÃ FIX]: Regex lấy chính xác số thập phân, tránh biến 50.5 thành 505
+# [ĐÃ FIX LẦN 2]: Ép kiểu về số nguyên để Supabase không báo lỗi Type Integer
 def extract_number(text):
     if not text: return 0
     match = re.search(r'\d+([.,]\d+)?', str(text))
     if match:
         num_str = match.group().replace(',', '.')
-        return float(num_str)
+        # Chuyển thành số thập phân trước (đề phòng 50.5), sau đó ép về số nguyên
+        return int(float(num_str)) 
     return 0
 
 # ================= 2. AI BIÊN TẬP (JSON MODE) =================
@@ -33,7 +34,6 @@ def ai_analyze_bds(tieu_de, ngu_canh_tho):
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     
-    # [ĐÃ FIX]: Ép AI trả về đúng cấu trúc JSON với 2 Key rõ ràng
     prompt = (
         f"Bạn là chuyên gia BĐS Lào Cai. Hãy đọc bài đăng thô và trả về ĐÚNG định dạng JSON sau:\n"
         f"{{\n"
@@ -66,7 +66,6 @@ def process_image(url_goc, slug):
             print("📍 Ảnh: ❌ Không có URL để xử lý.")
             return ""
         
-        # [ĐÃ FIX]: Dùng curl_requests thay vì requests để vượt qua CDN/Cloudflare chặn tải ảnh
         res = curl_requests.get(url_goc, impersonate="chrome", timeout=20)
         img_data = io.BytesIO(res.content)
         
