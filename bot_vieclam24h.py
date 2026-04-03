@@ -17,6 +17,9 @@ if not GROQ_KEYS:
     print("❌ Lỗi: Không tìm thấy GROQ_API_KEY nào hợp lệ!")
     sys.exit(1)
 
+# Lấy thêm biến Cookie từ Github Secrets
+CHOTOT_COOKIE = os.environ.get("CHOTOT_COOKIE", "")
+
 supabase = create_client(os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_KEY"))
 
 def tao_slug(s):
@@ -68,8 +71,11 @@ def ai_analyze_job(text_tho):
 
 # ================= 3. QUY TRÌNH HÚT DATA CHỢ TỐT =================
 def run_bot():
-    print("🚀 BẮT ĐẦU CÚ CHÓT: RÚT RUỘT DATA CHỢ TỐT (LÀO CAI)")
+    print("🚀 BẮT ĐẦU CÚ CHÓT: RÚT RUỘT DATA CHỢ TỐT (KÈM SĐT)")
     
+    if not CHOTOT_COOKIE:
+        print("⚠️ CẢNH BÁO: Chưa có CHOTOT_COOKIE, có thể không lấy được số điện thoại ẩn!")
+
     danh_sach_link_cu = set()
     try:
         res_db = supabase.table("viec_lam").select("link_goc").execute()
@@ -78,7 +84,6 @@ def run_bot():
         print(f"🛡️ Khiên đã bật! Ghi nhớ {len(danh_sach_link_cu)} job cũ.")
     except: pass
 
-    # API ngầm của Chợ Tốt (Danh mục 13000 = Việc làm, q=Lào Cai)
     api_list = "https://gateway.chotot.com/v1/public/ad-listing?cg=13000&q=Lào%20Cai&limit=20"
     da_xu_ly = 0
 
@@ -88,6 +93,12 @@ def run_bot():
         ads = res.json().get('ads', [])
         
         print(f"📋 Ôm trọn ổ: Tìm thấy {len(ads)} tin.")
+
+        # Chuẩn bị Header chứa Cookie để lừa hệ thống lấy SĐT
+        headers_chotot = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Cookie": CHOTOT_COOKIE
+        }
 
         for ad in ads:
             list_id = ad.get('list_id')
@@ -99,14 +110,26 @@ def run_bot():
 
             print(f"\n--- 🔎 ĐANG SOI: {ad.get('subject')} ---")
             
-            # Gọi API lấy chi tiết bài viết
+            # Gọi API lấy chi tiết bài viết (Kèm thẻ Cookie)
             api_detail = f"https://gateway.chotot.com/v1/public/ad-listing/{list_id}"
-            res_dt = requests.get(api_detail, timeout=10)
+            res_dt = requests.get(api_detail, headers=headers_chotot, timeout=10)
             ad_dt = res_dt.json().get('ad', {})
             
             text_tho = ad_dt.get('body', '')
             hinh_anh = [ad_dt.get('image')] if ad_dt.get('image') else []
             
+            # --- TÌM SỐ ĐIỆN THOẠI ---
+            so_dien_thoai = ad_dt.get('phone', '') # Thử lấy từ API trước
+            if not so_dien_thoai:
+                # Nếu API giấu, lôi súng Radar ra quét trong nội dung
+                phone_match = re.search(r'(0[3|5|7|8|9])+([0-9]{8})\b', text_tho)
+                if phone_match: so_dien_thoai = phone_match.group(0)
+            
+            if so_dien_thoai:
+                print(f"   📞 Đã tóm được SĐT: {so_dien_thoai}")
+            else:
+                print("   ⚠️ Không tìm thấy SĐT cho bài này.")
+
             # Thông tin có sẵn không cần AI mổ
             tieu_de = ad_dt.get('subject', 'Tuyển dụng Lào Cai')
             muc_luong = ad_dt.get('price_string', 'Thỏa thuận')
@@ -122,7 +145,8 @@ def run_bot():
 
                 data_to_save = {
                     "tieu_de": tieu_de, "slug": slug, "cong_ty": cong_ty,
-                    "muc_luong": muc_luong, "vi_tri": dia_diem, # ĐÃ ĐỔI TÊN CỘT Ở ĐÂY!
+                    "muc_luong": muc_luong, "vi_tri": dia_diem, 
+                    "so_dien_thoai": so_dien_thoai, # BƠM VÀO KÉT SẮT
                     "hinh_thuc": "Full-time", "kinh_nghiem": ai_data.get("kinh_nghiem", "Không yêu cầu"),
                     "so_luong": int(so_luong) if so_luong else 1, "han_nop": ai_data.get("han_nop", "Đang mở"),
                     "nhan_fomo": ai_data.get("nhan_fomo", ""), "hinh_anh": hinh_anh,
