@@ -1,4 +1,4 @@
-import os, sys, re, time, requests, json
+import os, sys, re, time, requests, json, random
 from curl_cffi import requests as curl_requests
 from bs4 import BeautifulSoup
 from supabase import create_client
@@ -13,7 +13,6 @@ def check_config():
 
 check_config()
 
-# Xử lý băng đạn API Keys (Cách nhau bằng dấu phẩy)
 raw_keys = os.environ.get("GROQ_API_KEY", "")
 GROQ_KEYS = [k.strip() for k in raw_keys.split(",") if k.strip()]
 if not GROQ_KEYS:
@@ -36,7 +35,29 @@ def tao_slug(s):
     s = re.sub(r'\s+', '-', s)
     return re.sub(r'-+', '-', s).strip('-')
 
-# ================= 2. AI BIÊN TẬP (HỖ TRỢ NHIỀU API KEYS) =================
+# Sinh User-Agent ngẫu nhiên để tàng hình
+def get_random_header():
+    uas = [
+        '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+        '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+        '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"'
+    ]
+    return {
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Cache-Control": "max-age=0",
+        "Priority": "u=0, i",
+        "Sec-Ch-Ua": random.choice(uas),
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"Windows"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1"
+    }
+
+# ================= 2. AI BIÊN TẬP =================
 def ai_analyze_job(url_goc, text_tho):
     print(f"🤖 Đang gửi dữ liệu ({len(text_tho)} ký tự) nhờ AI bóc tách...")
     url = "https://api.groq.com/openai/v1/chat/completions"
@@ -66,10 +87,8 @@ def ai_analyze_job(url_goc, text_tho):
         "llama-3.1-8b-instant"
     ]
 
-    # Xoay vòng qua từng API Key sếp đã nạp
     for api_key in GROQ_KEYS:
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-        
         for model_name in danh_sach_models:
             payload = {
                 "model": model_name,
@@ -80,7 +99,6 @@ def ai_analyze_job(url_goc, text_tho):
             try:
                 res = requests.post(url, headers=headers, json=payload, timeout=35)
                 res_json = res.json()
-                
                 if res.status_code == 200 and 'choices' in res_json:
                     ai_res = json.loads(res_json['choices'][0]['message']['content'])
                     print(f"  ✅ AI [{model_name}] đã trích xuất thành công!")
@@ -92,12 +110,11 @@ def ai_analyze_job(url_goc, text_tho):
                     err_msg = res_json.get('error', {}).get('message', 'Lỗi không xác định')
                     print(f"  ⚠️ Lỗi [{model_name}]: {err_msg}")
                     continue
-                    
             except Exception as e:
                 print(f"  ⚠️ Lỗi kết nối [{model_name}]: {str(e)}")
                 continue 
 
-    print("⏳ Toàn bộ băng đạn AI đều đã cạn kiệt, ép Bot ngủ 60s hồi máu...")
+    print("⏳ AI cạn kiệt, ép Bot ngủ 60s...")
     time.sleep(60)
     return None
 
@@ -124,7 +141,8 @@ def run_bot():
         print(f"\n🌍 ĐANG QUÉT TRANG {page}: {url_page}")
         
         try:
-            res = curl_requests.get(url_page, impersonate="chrome", timeout=30)
+            # Dùng áo tàng hình ở đây
+            res = curl_requests.get(url_page, impersonate="chrome120", headers=get_random_header(), timeout=30)
             if res.status_code != 200:
                 print(f"⚠️ Web từ chối truy cập (Mã lỗi {res.status_code}). Đang bị chặn!")
                 continue
@@ -147,7 +165,8 @@ def run_bot():
                 
                 print(f"\n--- 🔎 ĐANG SOI: {detail_url[-50:]} ---")
                 try:
-                    res_dt = curl_requests.get(detail_url, impersonate="chrome", timeout=30)
+                    # Mặc áo tàng hình soi chi tiết
+                    res_dt = curl_requests.get(detail_url, impersonate="chrome120", headers=get_random_header(), timeout=30)
                     soup_dt = BeautifulSoup(res_dt.content, 'html.parser')
                     
                     text_tho = soup_dt.get_text(separator="\n", strip=True)
