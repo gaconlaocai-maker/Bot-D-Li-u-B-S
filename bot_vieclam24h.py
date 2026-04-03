@@ -122,7 +122,7 @@ def run_bot():
 
                 data_to_save = {
                     "tieu_de": tieu_de, "slug": slug, "cong_ty": cong_ty,
-                    "muc_luong": muc_luong, "dia_diem": dia_diem,
+                    "muc_luong": muc_luong, "vi_tri": dia_diem, # ĐÃ ĐỔI TÊN CỘT Ở ĐÂY!
                     "hinh_thuc": "Full-time", "kinh_nghiem": ai_data.get("kinh_nghiem", "Không yêu cầu"),
                     "so_luong": int(so_luong) if so_luong else 1, "han_nop": ai_data.get("han_nop", "Đang mở"),
                     "nhan_fomo": ai_data.get("nhan_fomo", ""), "hinh_anh": hinh_anh,
@@ -134,7 +134,7 @@ def run_bot():
                 da_xu_ly += 1
                 print(f"✅ ĐÃ LƯU THÀNH CÔNG!")
                 
-            time.sleep(2) # Chạy nhanh quá nên cho nghỉ 2s thôi
+            time.sleep(2) 
             
     except Exception as e:
         print(f"❌ Lỗi đường ống: {str(e)}")
