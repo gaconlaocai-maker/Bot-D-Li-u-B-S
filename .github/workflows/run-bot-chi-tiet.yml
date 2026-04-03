@@ -1,8 +1,6 @@
 name: Chạy Bot Chi Tiết BĐS Sa Pa
 on:
-  workflow_dispatch: {} # Nút bấm chạy thủ công
-  schedule:
-    - cron: '*/10 * * * *' # Chạy tự động mỗi 3 phút (Dành cho test)
+  workflow_dispatch: {} # Nhận lệnh chạy thủ công hoặc từ đồng hồ báo thức cron-job.org
 
 jobs:
   run-bot:
@@ -25,6 +23,7 @@ jobs:
       - name: Thực thi Bot Chi Tiết
         run: python bot_chi_tiet_bds.py
         env:
+          PYTHONUNBUFFERED: "1" # Dòng quan trọng nhất để xả log trực tiếp!
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
