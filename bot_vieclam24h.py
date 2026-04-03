@@ -13,7 +13,13 @@ def check_config():
 
 check_config()
 
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+# Xử lý băng đạn API Keys (Cách nhau bằng dấu phẩy)
+raw_keys = os.environ.get("GROQ_API_KEY", "")
+GROQ_KEYS = [k.strip() for k in raw_keys.split(",") if k.strip()]
+if not GROQ_KEYS:
+    print("❌ Lỗi: Không tìm thấy GROQ_API_KEY nào hợp lệ!")
+    sys.exit(1)
+
 supabase = create_client(os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_KEY"))
 
 def tao_slug(s):
@@ -30,11 +36,10 @@ def tao_slug(s):
     s = re.sub(r'\s+', '-', s)
     return re.sub(r'-+', '-', s).strip('-')
 
-# ================= 2. AI BIÊN TẬP (CHUYÊN GIA NHÂN SỰ) =================
+# ================= 2. AI BIÊN TẬP (HỖ TRỢ NHIỀU API KEYS) =================
 def ai_analyze_job(url_goc, text_tho):
     print(f"🤖 Đang gửi dữ liệu ({len(text_tho)} ký tự) nhờ AI bóc tách...")
     url = "https://api.groq.com/openai/v1/chat/completions"
-    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     
     prompt = (
         f"Bạn là một Headhunter chuyên nghiệp. Hãy đọc thông tin trang tuyển dụng và trích xuất dữ liệu.\n"
@@ -61,32 +66,46 @@ def ai_analyze_job(url_goc, text_tho):
         "llama-3.1-8b-instant"
     ]
 
-    for model_name in danh_sach_models:
-        payload = {
-            "model": model_name,
-            "messages": [{"role": "user", "content": prompt}],
-            "response_format": { "type": "json_object" },
-            "temperature": 0.2 
-        }
-        try:
-            res = requests.post(url, headers=headers, json=payload, timeout=35)
-            res_json = res.json()
-            if 'choices' in res_json:
-                ai_res = json.loads(res_json['choices'][0]['message']['content'])
-                print(f"  ✅ AI [{model_name}] đã trích xuất thành công!")
-                return ai_res
-        except Exception:
-            continue 
+    # Xoay vòng qua từng API Key sếp đã nạp
+    for api_key in GROQ_KEYS:
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        
+        for model_name in danh_sach_models:
+            payload = {
+                "model": model_name,
+                "messages": [{"role": "user", "content": prompt}],
+                "response_format": { "type": "json_object" },
+                "temperature": 0.2 
+            }
+            try:
+                res = requests.post(url, headers=headers, json=payload, timeout=35)
+                res_json = res.json()
+                
+                if res.status_code == 200 and 'choices' in res_json:
+                    ai_res = json.loads(res_json['choices'][0]['message']['content'])
+                    print(f"  ✅ AI [{model_name}] đã trích xuất thành công!")
+                    return ai_res
+                elif res.status_code == 429:
+                    print(f"  ⚠️ Key/Model [{model_name}] bị Rate Limit. Đang chuyển súng...")
+                    continue 
+                else:
+                    err_msg = res_json.get('error', {}).get('message', 'Lỗi không xác định')
+                    print(f"  ⚠️ Lỗi [{model_name}]: {err_msg}")
+                    continue
+                    
+            except Exception as e:
+                print(f"  ⚠️ Lỗi kết nối [{model_name}]: {str(e)}")
+                continue 
 
-    print("⏳ AI quá tải, ép Bot ngủ 60s...")
+    print("⏳ Toàn bộ băng đạn AI đều đã cạn kiệt, ép Bot ngủ 60s hồi máu...")
     time.sleep(60)
     return None
 
 # ================= 3. QUY TRÌNH QUÉT =================
 def run_bot():
     print("🚀 BẮT ĐẦU CÀO VIỆC LÀM 24H (LÀO CAI)")
+    print(f"🔫 Số lượng API Key đã nạp: {len(GROQ_KEYS)} keys.")
     
-    # 1. Dựng khiên chống trùng lặp bằng link_goc
     print("🗄️ Đang tải dữ liệu Két sắt để dựng khiên...")
     danh_sach_link_cu = set()
     try:
@@ -100,31 +119,24 @@ def run_bot():
     base_url = "https://vieclam24h.vn/viec-lam-lao-cai-p78.html"
     da_xu_ly = 0
 
-    for page in range(1, 4): # Quét 3 trang đầu
+    for page in range(1, 4): 
         url_page = f"{base_url}?page={page}"
         print(f"\n🌍 ĐANG QUÉT TRANG {page}: {url_page}")
         
         try:
             res = curl_requests.get(url_page, impersonate="chrome", timeout=30)
-            
-            # Khúc này em gắn thêm còi báo động, nếu thật sự bị Cloudflare chặn nó sẽ hú lên cho sếp biết
             if res.status_code != 200:
-                print(f"⚠️ Web từ chối truy cập (Mã lỗi {res.status_code}). Đang bị bot-protection chặn!")
+                print(f"⚠️ Web từ chối truy cập (Mã lỗi {res.status_code}). Đang bị chặn!")
                 continue
 
             soup = BeautifulSoup(res.content, 'html.parser')
             
-            # --- ĐOẠN ĐÃ SỬA LẠI ĐỂ TÓM ĐÚNG LINK CỦA VL24H ---
             links = []
             for a in soup.find_all('a', href=True):
-                # Bỏ cái mớ bòng bong ?open_from= tracking phía sau link
                 href = a['href'].split('?')[0] 
-                
-                # Bắt đúng link có chứa "id + dãy số + .html" (Đặc sản cấu trúc link mới của VL24h)
                 if re.search(r'id\d+\.html$', href) and 'danh-sach-tin-tuyen-dung' not in href:
                     full_link = "https://vieclam24h.vn" + href if href.startswith('/') else href
                     if full_link not in links: links.append(full_link)
-            # ----------------------------------------------------
 
             print(f"📋 Tìm thấy {len(links)} tin trên trang {page}.")
 
@@ -138,10 +150,8 @@ def run_bot():
                     res_dt = curl_requests.get(detail_url, impersonate="chrome", timeout=30)
                     soup_dt = BeautifulSoup(res_dt.content, 'html.parser')
                     
-                    # Lấy text thô để ném cho AI đọc hiểu
                     text_tho = soup_dt.get_text(separator="\n", strip=True)
                     
-                    # Lấy ảnh đại diện (og:image)
                     meta_img = soup_dt.find("meta", property="og:image")
                     hinh_anh = [meta_img["content"]] if meta_img and meta_img.get("content") else []
 
@@ -167,7 +177,7 @@ def run_bot():
                             "hinh_anh": hinh_anh,
                             "mo_ta": ai_data.get("html_clean", ""),
                             "link_goc": detail_url,
-                            "trang_thai": "Chờ duyệt" # Vào mục Chờ duyệt để sếp lọc
+                            "trang_thai": "Chờ duyệt"
                         }
 
                         supabase.table("viec_lam").insert(data_to_save).execute()
@@ -175,7 +185,7 @@ def run_bot():
                         da_xu_ly += 1
                         print(f"✅ ĐÃ LƯU: {tieu_de[:40]}...")
                         
-                    time.sleep(5) # Tránh bị khoá IP
+                    time.sleep(5) 
                 except Exception as e:
                     print(f"❌ Lỗi xử lý tin: {str(e)}")
 
