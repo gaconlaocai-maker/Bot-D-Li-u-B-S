@@ -2,7 +2,7 @@ name: Chạy Bot Chi Tiết BĐS Sa Pa
 on:
   workflow_dispatch: {} # Nút bấm chạy thủ công
   schedule:
-    - cron: '*/3 * * * *' # Chạy tự động mỗi 3 phút (Dành cho test)
+    - cron: '*/10 * * * *' # Chạy tự động mỗi 3 phút (Dành cho test)
 
 jobs:
   run-bot:
