@@ -167,7 +167,7 @@ def run_bot():
                         if meta_img and meta_img.get("content"):
                             raw_img_urls.append(meta_img.get("content"))
                     
-                    raw_img_urls = raw_img_urls[:5] 
+                    raw_img_urls = raw_img_urls[:10] 
 
                     # Gửi AI để làm sạch HTML
                     ai_data = ai_analyze_bds(title, raw_desc)
