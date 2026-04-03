@@ -85,7 +85,8 @@ def process_image(url_goc, slug):
             buffer = io.BytesIO()
             rgb_img.save(buffer, format="WEBP", quality=75)
             buffer.seek(0)
-            up = cloudinary.uploader.upload(buffer, folder="sapa_bds", public_id=slug)
+            # [ĐÃ FIX]: Ép con bot dùng Upload Preset để đóng dấu logo
+            up = cloudinary.uploader.upload(buffer, folder="sapa_bds", public_id=slug, upload_preset="laocaiview_upload")
             print(f"    + Đã tải ảnh lên mây: {up['secure_url'][:40]}...")
             return up['secure_url']
     except Exception as e:
