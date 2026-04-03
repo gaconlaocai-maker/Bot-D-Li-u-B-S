@@ -1,0 +1,22 @@
+name: Chạy Bot Chi Tiết BĐS Sa Pa
+on:
+  workflow_dispatch: {} # Nút bấm chạy thủ công
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Cài đặt thư viện
+        run: pip install -r requirements.txt
+      - name: Thực thi Bot Chi Tiết
+        run: python bot_chi_tiet_bds.py
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
