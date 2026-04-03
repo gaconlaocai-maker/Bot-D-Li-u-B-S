@@ -40,22 +40,26 @@ def tao_slug(s):
     s = re.sub(r'\s+', '-', s)
     return re.sub(r'-+', '-', s).strip('-')
 
-# ================= 2. AI BIÊN TẬP (AUTO SEO & COPYWRITER) =================
+# ================= 2. AI BIÊN TẬP (PROMPT HẠNG NẶNG CHO COPYWRITER) =================
 def ai_analyze_bds(tieu_de, ngu_canh_tho):
-    print(f"🤖 Đang gửi dữ liệu sang AI xử lý SEO (Độ dài: {len(ngu_canh_tho)} ký tự)...")
+    print(f"🤖 Đang ép AI vắt óc viết bài SEO chi tiết (Độ dài: {len(ngu_canh_tho)} ký tự)...")
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     
-    # [ĐÃ NÂNG CẤP]: Bóc lột AI làm thêm Meta Desc, Vị trí và Nhãn FOMO
+    # [ĐÃ NÂNG CẤP TỐI ĐA]: Ép AI giữ nguyên số liệu, viết tiêu đề dài và chia bố cục rõ ràng
     prompt = (
-        f"Bạn là chuyên gia Copywriter BĐS hàng đầu tại Lào Cai. Hãy đọc thông tin bài rao bán BĐS sau. TUYỆT ĐỐI không bịa đặt số liệu, chỉ dựa vào văn bản gốc. TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON SAU:\n"
+        f"Bạn là một Siêu Cò BĐS và Chuyên gia Copywriter tại Lào Cai. Hãy đọc kỹ thông tin bài rao bán dưới đây.\n"
+        f"Lệnh TUYỆT ĐỐI:\n"
+        f"- KHÔNG ĐƯỢC TÓM TẮT QUÁ NGẮN. KHÔNG ĐƯỢC BỎ SÓT BẤT KỲ CON SỐ NÀO (Giá, Diện tích, Số phòng, Mặt tiền, Tiện ích xung quanh).\n"
+        f"- KHÔNG ĐƯỢC BỊA ĐẶT THÔNG TIN TRÁI VỚI BẢN GỐC.\n\n"
+        f"Hãy trả về JSON chính xác với cấu trúc sau:\n"
         f"{{\n"
-        f"  \"loai_bds\": \"Phân loại BĐS (chỉ chọn 1 trong: villa, hotel, land, nhà phố). Đoán dựa trên nội dung.\",\n"
-        f"  \"vi_tri\": \"Trích xuất khu vực/địa chỉ ngắn gọn (vd: Thạch Sơn, Sa Pa). Không bịa đặt.\",\n"
-        f"  \"tieu_de_moi\": \"Viết 1 tiêu đề mới cực kỳ thu hút, giật tít, giữ nguyên diện tích/vị trí (dưới 70 ký tự).\",\n"
-        f"  \"meta_desc\": \"Đoạn mô tả ngắn phục vụ SEO Google (khoảng 150 ký tự), tóm tắt những điểm mạnh nhất.\",\n"
-        f"  \"nhan_fomo\": \"Tạo 1 nhãn dán ngắn gọn tối đa 5 từ để kích thích người mua (vd: Cắt lỗ gấp, Hàng hiếm, View thung lũng, Kinh doanh đỉnh...). Trích xuất từ ý chính của bài.\",\n"
-        f"  \"html_clean\": \"Viết bài giới thiệu BĐS lôi cuốn, văn phong sang trọng. Chia đoạn rõ ràng bằng mã HTML sạch (<p>, <ul>, <li>, <strong>). TUYỆT ĐỐI XÓA SẠCH SĐT, link và tên môi giới. KHÔNG thay đổi các thông số kỹ thuật.\"\n"
+        f"  \"loai_bds\": \"Chỉ chọn 1: villa, hotel, land, nhà phố\",\n"
+        f"  \"vi_tri\": \"Trích xuất khu vực (vd: Thạch Sơn, Sa Pa)\",\n"
+        f"  \"tieu_de_moi\": \"Viết 1 tiêu đề giật tít, đầy đủ thông tin, DÀI TỪ 60 - 100 KÝ TỰ (Vd: Bán Nhà Mặt Phố Thạch Sơn, Sa Pa - 350m2, Đang Kinh Doanh Đỉnh). KHÔNG ĐƯỢC VIẾT CỤT NGỦN.\",\n"
+        f"  \"meta_desc\": \"Mô tả SEO hấp dẫn khoảng 150 ký tự, tóm tắt điểm ăn tiền nhất.\",\n"
+        f"  \"nhan_fomo\": \"Nhãn tối đa 5 từ (vd: Dòng Tiền Khủng, Lô Góc Siêu Hiếm, Kinh Doanh Sầm Uất...).\",\n"
+        f"  \"html_clean\": \"Viết bài PR cực kỳ CHI TIẾT, DÀI DẶN, văn phong đẳng cấp, lôi cuốn người mua. BẮT BUỘC giữ lại toàn bộ giá trị, thông số, ưu điểm từ bản gốc. Trình bày đẹp mắt bằng HTML. BẮT BUỘC dùng các thẻ <h3> để chia đoạn rõ ràng (Ví dụ: <h3>🌟 Vị Trí Đắc Địa</h3>, <h3>💎 Thiết Kế & Thông Số</h3>, <h3>🚀 Tiềm Năng Đầu Tư</h3>). Dùng thẻ <ul>, <li> để liệt kê các tiện ích, điểm nổi bật. XÓA SẠCH SĐT và tên môi giới cũ.\"\n"
         f"}}\n\n"
         f"--- Tiêu đề gốc: {tieu_de}\n"
         f"--- Mô tả gốc: {ngu_canh_tho}"
@@ -65,13 +69,13 @@ def ai_analyze_bds(tieu_de, ngu_canh_tho):
         "model": "llama-3.3-70b-versatile",
         "messages": [{"role": "user", "content": prompt}],
         "response_format": { "type": "json_object" },
-        "temperature": 0.3 # Vừa đủ để sáng tạo văn phong, nhưng không đủ cao để "ảo giác" bịa số liệu
+        "temperature": 0.3 
     }
     
     try:
         res = requests.post(url, headers=headers, json=payload, timeout=30)
         ai_res = json.loads(res.json()['choices'][0]['message']['content'])
-        print("✅ AI đã hoàn tất gói Auto-SEO (Tiêu đề, Meta, FOMO, HTML).")
+        print("✅ AI đã sáng tác xong bài PR dài dặn, giữ nguyên số liệu.")
         return ai_res
     except Exception as e:
         print(f"⚠️ Lỗi AI Groq: {str(e)}")
@@ -100,7 +104,7 @@ def process_image(url_goc, slug):
 # ================= 4. QUY TRÌNH QUÉT CHÍNH (ĐA TRANG) =================
 def run_bot():
     base_url = "https://batdongsan.com.vn/nha-dat-ban-sa-pa-lca"
-    print("🚀 BẮT ĐẦU CHẾ ĐỘ CÀO DIỆN RỘNG (KẾT HỢP AUTO-SEO AI)")
+    print("🚀 BẮT ĐẦU CHẾ ĐỘ CÀO DIỆN RỘNG (PROMPT HẠNG NẶNG)")
     
     da_xu_ly = 0
     trang_bat_dau = 1
@@ -132,7 +136,8 @@ def run_bot():
                 print(f"\n--- 🔎 ĐANG SOI TIN: {tieu_de_goc[:40]}... ---")
 
                 try:
-                    check_dup = supabase.table("bds_ban").select("id").eq("vi_tri_hien_thi", f'["{detail_url}"]').execute()
+                    # [ĐÃ FIX LỖI TÌM TRÙNG LẶP]: Dùng hàm .cs() để kiểm tra chính xác URL trong mảng JSON
+                    check_dup = supabase.table("bds_ban").select("id").cs("vi_tri_hien_thi", [detail_url]).execute()
                     if len(check_dup.data) > 0:
                         print("⏭️ TIN ĐÃ TỒN TẠI. BỎ QUA!")
                         continue
@@ -146,7 +151,6 @@ def run_bot():
                     desc_body = soup_dt.select_one('.re__section-body.re__detail-content.js__section-body, .re__detail-content, .js__section-body')
                     raw_desc = desc_body.get_text(separator="\n", strip=True) if desc_body else ""
                     
-                    # Bóc tách bằng Code chuẩn 100% để bảo toàn số liệu kỹ thuật
                     dic_thong_so = {}
                     bang_thong_so = soup_dt.select('.re__pr-specs-content-item')
                     for item in bang_thong_so:
@@ -172,8 +176,10 @@ def run_bot():
                     
                     raw_img_urls = raw_img_urls[:10] 
 
-                    # Gửi AI làm SEO và xào bài
-                    ai_data = ai_analyze_bds(tieu_de_goc, raw_desc)
+                    # Ghép Toàn bộ mô tả + bảng thông số lại nhét vào AI để nó không bị "đói" dữ liệu
+                    full_context_cho_ai = f"NỘI DUNG MÔ TẢ:\n{raw_desc}\n\nTHÔNG SỐ KỸ THUẬT (PHẢI GIỮ NGUYÊN):\n" + "\n".join([f"- {k}: {v}" for k, v in dic_thong_so.items()])
+                    
+                    ai_data = ai_analyze_bds(tieu_de_goc, full_context_cho_ai)
                     
                     if ai_data:
                         tieu_de_moi = ai_data.get("tieu_de_moi", tieu_de_goc)
@@ -190,14 +196,13 @@ def run_bot():
                         price_tag = card.select_one('span.re__card-config-price')
                         area_tag = card.select_one('span.re__card-config-area')
 
-                        # Đổ toàn bộ dữ liệu tinh hoa từ Bot Code và Bot AI vào Supabase
                         data_to_save = {
                             "tieu_de": tieu_de_moi, 
                             "slug": slug,
                             "gia": price_tag.get_text(strip=True) if price_tag else "Thỏa thuận",
                             "dien_tich": extract_number(area_tag.get_text()) if area_tag else 0,
                             "loai_bds": ai_data.get("loai_bds", "land"),
-                            "vi_tri": ai_data.get("vi_tri", "Sa Pa, Lào Cai"), # AI tự lấy
+                            "vi_tri": ai_data.get("vi_tri", "Sa Pa, Lào Cai"), 
                             "phong_ngu": extract_number(dic_thong_so.get("Số phòng ngủ")) if dic_thong_so.get("Số phòng ngủ") else None,
                             "phong_tam": extract_number(dic_thong_so.get("Số phòng tắm, vệ sinh")) if dic_thong_so.get("Số phòng tắm, vệ sinh") else None,
                             "he_so_tang": str(extract_number(dic_thong_so.get("Số tầng"))) if dic_thong_so.get("Số tầng") else None,
@@ -205,16 +210,16 @@ def run_bot():
                             "phap_ly": dic_thong_so.get("Pháp lý", None),
                             "hinh_anh": final_images,
                             "mo_ta": ai_data.get("html_clean"), 
-                            "meta_title": tieu_de_moi, # Dùng luôn tiêu đề làm meta_title
-                            "meta_desc": ai_data.get("meta_desc", ""), # AI tự tóm tắt
-                            "nhan_fomo": ai_data.get("nhan_fomo", ""), # AI tự tạo FOMO
+                            "meta_title": tieu_de_moi, 
+                            "meta_desc": ai_data.get("meta_desc", ""), 
+                            "nhan_fomo": ai_data.get("nhan_fomo", ""), 
                             "vi_tri_hien_thi": [detail_url],
                             "trang_thai": "Bản nháp"
                         }
 
                         supabase.table("bds_ban").insert(data_to_save).execute()
                         da_xu_ly += 1
-                        print(f"✅ Đã lưu tin thứ {da_xu_ly} (FOMO: {data_to_save['nhan_fomo']})")
+                        print(f"✅ Đã lưu tin thứ {da_xu_ly} (Tiêu đề: {tieu_de_moi[:50]}...)")
                     
                     time.sleep(10)
 
