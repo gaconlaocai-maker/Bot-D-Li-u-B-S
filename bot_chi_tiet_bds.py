@@ -18,13 +18,11 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 supabase = create_client(os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_KEY"))
 cloudinary.config(cloudinary_url=os.environ.get("CLOUDINARY_URL"))
 
-# [ĐÃ FIX LẦN 2]: Ép kiểu về số nguyên để Supabase không báo lỗi Type Integer
 def extract_number(text):
     if not text: return 0
     match = re.search(r'\d+([.,]\d+)?', str(text))
     if match:
         num_str = match.group().replace(',', '.')
-        # Chuyển thành số thập phân trước (đề phòng 50.5), sau đó ép về số nguyên
         return int(float(num_str)) 
     return 0
 
@@ -63,7 +61,6 @@ def ai_analyze_bds(tieu_de, ngu_canh_tho):
 def process_image(url_goc, slug):
     try:
         if not url_goc: 
-            print("📍 Ảnh: ❌ Không có URL để xử lý.")
             return ""
         
         res = curl_requests.get(url_goc, impersonate="chrome", timeout=20)
@@ -75,13 +72,13 @@ def process_image(url_goc, slug):
             rgb_img.save(buffer, format="WEBP", quality=75)
             buffer.seek(0)
             up = cloudinary.uploader.upload(buffer, folder="sapa_bds", public_id=slug)
-            print(f"📍 Ảnh: ✅ Đã nén và tải lên Cloudinary ({up['secure_url'][:50]}...)")
+            print(f"    + Đã tải ảnh lên mây: {up['secure_url'][:40]}...")
             return up['secure_url']
     except Exception as e:
-        print(f"⚠️ Lỗi xử lý ảnh: {str(e)}")
-        return url_goc
+        print(f"    ⚠️ Lỗi xử lý ảnh: {str(e)}")
+        return ""
 
-# ================= 4. QUY TRÌNH QUÉT THỬ NGHIỆM (2 TIN) =================
+# ================= 4. QUY TRÌNH QUÉT CHÍNH =================
 def run_bot():
     base_url = "https://batdongsan.com.vn/nha-dat-ban-sa-pa-lca"
     print("🚀 BẮT ĐẦU CHẾ ĐỘ TEST: CHỈ LẤY 2 BĐS VÀ SOI LOG CHI TIẾT")
@@ -113,39 +110,50 @@ def run_bot():
             desc_body = soup_dt.select_one('.re__section-body.re__detail-content.js__section-body, .re__detail-content, .js__section-body')
             raw_desc = desc_body.get_text(separator="\n", strip=True) if desc_body else ""
             if raw_desc:
-                print(f"📍 Mô tả: ✅ Đã lấy ({len(raw_desc)} ký tự). Đoạn đầu: {raw_desc[:50]}...")
+                print(f"📍 Mô tả: ✅ Đã lấy ({len(raw_desc)} ký tự).")
             else:
                 print("📍 Mô tả: ❌ KHÔNG TÌM THẤY (Selector hỏng hoặc trang trống)!")
 
             # --- 2. SOI THÔNG SỐ (SPECS) ---
             specs = soup_dt.select('.re__pr-specs-content-item')
-            print(f"📍 Thông số: Tìm thấy {len(specs)} mục.")
             raw_specs = "\n".join([s.get_text(strip=True) for s in specs])
             
-            # --- 3. SOI ẢNH ---
-            img_url = ""
-            meta_img = soup_dt.find("meta", property="og:image")
-            if meta_img:
-                img_url = meta_img.get("content")
-                print(f"📍 Ảnh (Meta): ✅ Tìm thấy: {img_url[:50]}...")
+            # --- 3. SOI ẢNH TỪ SLIDER (BẢN VÁ LỖI) ---
+            raw_img_urls = []
+            # Cào tất cả thẻ img nằm trong khung chứa hình ảnh (ưu tiên data-src để lấy ảnh xịn)
+            img_tags = soup_dt.select('.js__pr-image-item img, .re__pr-image-item img, swiper-slide img, .js__image-item img, .re__media-image img')
             
-            if not img_url:
-                img_tag = soup_dt.select_one('.re__pr-image-item img, .re__pr-image-item-main img, .js__pr-image-item img')
-                if img_tag:
-                    img_url = img_tag.get('data-src') or img_tag.get('src') or ""
-                    print(f"📍 Ảnh (Carousel): ✅ Tìm thấy: {img_url[:50]}...")
-                else:
-                    print("📍 Ảnh: ❌ KHÔNG TÌM THẤY TRONG THẺ HTML!")
+            for img in img_tags:
+                src = img.get('data-src') or img.get('src')
+                if src and "http" in src and src not in raw_img_urls:
+                    raw_img_urls.append(src)
+            
+            # Nếu web đổi cấu trúc không lấy được slider, lúc đó mới dùng ảnh Meta dự phòng
+            if not raw_img_urls:
+                meta_img = soup_dt.find("meta", property="og:image")
+                if meta_img and meta_img.get("content"):
+                    raw_img_urls.append(meta_img.get("content"))
+            
+            # Giới hạn lấy 5 ảnh để không làm nặng hệ thống Cloudinary
+            raw_img_urls = raw_img_urls[:5]
+            print(f"📍 Ảnh: Đã nhặt được {len(raw_img_urls)} ảnh từ bài đăng.")
 
             # --- 4. GỬI AI ---
             full_context = f"MÔ TẢ:\n{raw_desc}\n\nTHÔNG SỐ:\n{raw_specs}"
             ai_data = ai_analyze_bds(card.select_one('h3').get_text(), full_context)
             
             if ai_data:
-                # 5. LƯU THỬ NGHIỆM
+                # 5. XỬ LÝ VÀ LƯU THỬ NGHIỆM
                 title = card.select_one('h3').get_text(strip=True)
                 slug = re.sub(r'\W+', '-', title.lower())[:50] + "-" + str(int(time.time()))
-                final_img = process_image(img_url, slug)
+                
+                print("⏳ Đang nén và đưa ảnh lên Cloudinary...")
+                final_images = []
+                for idx, url in enumerate(raw_img_urls):
+                    img_slug = f"{slug}-img{idx}"
+                    up_url = process_image(url, img_slug)
+                    if up_url:
+                        final_images.append(up_url)
 
                 data_to_save = {
                     "tieu_de": title,
@@ -153,13 +161,13 @@ def run_bot():
                     "gia": card.select_one('span.re__card-config-price').get_text(strip=True),
                     "dien_tich": extract_number(card.select_one('span.re__card-config-area').get_text()),
                     "loai_bds": ai_data.get("loai_bds", "Nhà đất"),
-                    "hinh_anh": [final_img] if final_img else [],
+                    "hinh_anh": final_images, # Truyền cả mảng ảnh vào đây
                     "mo_ta": ai_data.get("html_clean"),
                     "vi_tri_hien_thi": [detail_url]
                 }
 
                 supabase.table("bds_ban").insert(data_to_save).execute()
-                print(f"✅ Đã lưu tin test {da_xu_ly + 1} vào Supabase.")
+                print(f"✅ Đã lưu tin test {da_xu_ly + 1} vào Supabase với {len(final_images)} ảnh.")
                 da_xu_ly += 1
             
             time.sleep(10)
