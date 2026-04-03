@@ -40,13 +40,12 @@ def tao_slug(s):
     s = re.sub(r'\s+', '-', s)
     return re.sub(r'-+', '-', s).strip('-')
 
-# ================= 2. AI BIÊN TẬP (PROMPT HẠNG NẶNG CHO COPYWRITER) =================
+# ================= 2. AI BIÊN TẬP (PROMPT HẠNG NẶNG + TRÁNH RATE LIMIT) =================
 def ai_analyze_bds(tieu_de, ngu_canh_tho):
     print(f"🤖 Đang ép AI vắt óc viết bài SEO chi tiết (Độ dài: {len(ngu_canh_tho)} ký tự)...")
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     
-    # [ĐÃ NÂNG CẤP TỐI ĐA]: Ép AI giữ nguyên số liệu, viết tiêu đề dài và chia bố cục rõ ràng
     prompt = (
         f"Bạn là một Siêu Cò BĐS và Chuyên gia Copywriter tại Lào Cai. Hãy đọc kỹ thông tin bài rao bán dưới đây.\n"
         f"Lệnh TUYỆT ĐỐI:\n"
@@ -74,11 +73,21 @@ def ai_analyze_bds(tieu_de, ngu_canh_tho):
     
     try:
         res = requests.post(url, headers=headers, json=payload, timeout=30)
-        ai_res = json.loads(res.json()['choices'][0]['message']['content'])
-        print("✅ AI đã sáng tác xong bài PR dài dặn, giữ nguyên số liệu.")
-        return ai_res
+        res_json = res.json()
+        
+        # [ĐÃ NÂNG CẤP]: Bắt mạch lỗi Rate Limit của Groq API
+        if 'choices' in res_json:
+            ai_res = json.loads(res_json['choices'][0]['message']['content'])
+            print("✅ AI đã sáng tác xong bài PR dài dặn, giữ nguyên số liệu.")
+            return ai_res
+        else:
+            print(f"⚠️ Groq API phàn nàn: {res_json}")
+            print("⏳ Đang ép Bot ngủ 60s để hồi phục Rate Limit (Hạn ngạch Token)...")
+            time.sleep(60)
+            return None
+            
     except Exception as e:
-        print(f"⚠️ Lỗi AI Groq: {str(e)}")
+        print(f"⚠️ Lỗi kết nối AI Groq: {str(e)}")
         return None
 
 # ================= 3. XỬ LÝ HÌNH ẢNH =================
@@ -136,7 +145,6 @@ def run_bot():
                 print(f"\n--- 🔎 ĐANG SOI TIN: {tieu_de_goc[:40]}... ---")
 
                 try:
-                    # [ĐÃ FIX LỖI TÌM TRÙNG LẶP]: Dùng hàm .cs() để kiểm tra chính xác URL trong mảng JSON
                     check_dup = supabase.table("bds_ban").select("id").cs("vi_tri_hien_thi", [detail_url]).execute()
                     if len(check_dup.data) > 0:
                         print("⏭️ TIN ĐÃ TỒN TẠI. BỎ QUA!")
@@ -176,7 +184,6 @@ def run_bot():
                     
                     raw_img_urls = raw_img_urls[:10] 
 
-                    # Ghép Toàn bộ mô tả + bảng thông số lại nhét vào AI để nó không bị "đói" dữ liệu
                     full_context_cho_ai = f"NỘI DUNG MÔ TẢ:\n{raw_desc}\n\nTHÔNG SỐ KỸ THUẬT (PHẢI GIỮ NGUYÊN):\n" + "\n".join([f"- {k}: {v}" for k, v in dic_thong_so.items()])
                     
                     ai_data = ai_analyze_bds(tieu_de_goc, full_context_cho_ai)
