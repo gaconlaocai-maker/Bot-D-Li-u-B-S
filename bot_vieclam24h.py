@@ -2,7 +2,6 @@ import os, sys, re, time, requests, json, traceback, urllib.parse
 from bs4 import BeautifulSoup
 from supabase import create_client
 from playwright.sync_api import sync_playwright
-from playwright_stealth import stealth_sync
 
 # ================= 1. CẤU HÌNH HỆ THỐNG =================
 def check_config():
@@ -36,28 +35,32 @@ def tao_slug(s):
     s = re.sub(r'\s+', '-', s)
     return re.sub(r'-+', '-', s).strip('-')
 
-# ================= 2. NINJA STEALTH & PROXY =================
+# ================= 2. NINJA STEALTH (TỰ CHẾ) & PROXY =================
 def lay_html_vuot_rao(url):
-    print(f"   [+] Gọi Ninja tàng hình lách cửa: {url[-40:]}...")
+    print(f"   [+] Mở xe tăng bọc thép húc cổng: {url[-40:]}...")
     html_content = ""
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(
                 headless=True, 
-                args=["--disable-blink-features=AutomationControlled", "--window-position=000,000"]
+                args=["--disable-blink-features=AutomationControlled"]
             )
             context = browser.new_context(
-                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-                viewport={"width": 1280, "height": 720}
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                viewport={"width": 1920, "height": 1080}
             )
             page = context.new_page()
             
-            # Phủ áo choàng tàng hình lên Bot
-            stealth_sync(page)
+            # Tự tay tiêm thuốc tàng hình (Xóa dấu vết Bot)
+            page.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+                window.chrome = { runtime: {} };
+                Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3]});
+            """)
             
-            page.goto(url, wait_until="domcontentloaded", timeout=50000)
-            page.mouse.wheel(0, 800) # Lăn chuột giả người thật
-            page.wait_for_timeout(4000) 
+            page.goto(url, wait_until="domcontentloaded", timeout=60000)
+            page.mouse.wheel(0, 1000) # Lăn chuột giả người thật
+            page.wait_for_timeout(5000) # Chờ 5s cho Cloudflare nó check xong
             
             html_content = page.content()
             browser.close()
@@ -120,7 +123,7 @@ def ai_analyze_job(url_goc, text_tho):
 
 # ================= 4. QUY TRÌNH QUÉT =================
 def run_bot():
-    print("🚀 BẮT ĐẦU CÀO VIỆC LÀM 24H (CHẾ ĐỘ NINJA TÀNG HÌNH)")
+    print("🚀 BẮT ĐẦU CÀO VIỆC LÀM 24H (CHẾ ĐỘ TÀNG HÌNH TỰ CHẾ)")
     
     danh_sach_link_cu = set()
     try:
