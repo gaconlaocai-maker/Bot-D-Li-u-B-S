@@ -1,0 +1,4 @@
+curl_cffi
+requests
+beautifulsoup4
+supabase
