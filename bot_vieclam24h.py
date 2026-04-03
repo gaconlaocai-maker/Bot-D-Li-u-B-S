@@ -1,4 +1,4 @@
-import os, sys, re, time, requests, json
+import os, sys, re, time, requests, json, traceback
 from bs4 import BeautifulSoup
 from supabase import create_client
 from playwright.sync_api import sync_playwright
@@ -37,7 +37,7 @@ def tao_slug(s):
 
 # ================= 2. VŨ KHÍ TỐI THƯỢNG: TRÌNH DUYỆT ẢO =================
 def lay_html_vuot_rao(url):
-    print(f"   [+] Mở Chrome ẩn danh để lách Cloudflare: {url[-40:]}...")
+    print(f"   [+] Mở Chrome ẩn danh lách Cloudflare: {url[-40:]}...")
     html_content = ""
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -48,8 +48,7 @@ def lay_html_vuot_rao(url):
         page = context.new_page()
         try:
             page.goto(url, wait_until="domcontentloaded", timeout=60000)
-            # Chờ 5 giây để trình duyệt tự động giải bài toán JS của Cloudflare
-            page.wait_for_timeout(5000) 
+            page.wait_for_timeout(5000) # Đợi 5 giây giải toán Cloudflare
             html_content = page.content()
         except Exception as e:
             print(f"   [!] Lỗi khi load trang: {str(e)}")
@@ -133,13 +132,11 @@ def run_bot():
     base_url = "https://vieclam24h.vn/viec-lam-lao-cai-p78.html"
     da_xu_ly = 0
 
-    # Lần này chỉ cần cày 1 trang duy nhất vì sếp báo chỉ có 1 trang
     for page in range(1, 2): 
         url_page = f"{base_url}?page={page}"
         print(f"\n🌍 ĐANG QUÉT TRANG {page}: {url_page}")
         
         try:
-            # Dùng xe tăng để húc cổng
             html_page = lay_html_vuot_rao(url_page)
             soup = BeautifulSoup(html_page, 'html.parser')
             
@@ -159,7 +156,6 @@ def run_bot():
                 
                 print(f"\n--- 🔎 ĐANG SOI: {detail_url[-50:]} ---")
                 try:
-                    # Lại dùng xe tăng húc cổng để lấy chi tiết
                     html_dt = lay_html_vuot_rao(detail_url)
                     soup_dt = BeautifulSoup(html_dt, 'html.parser')
                     
@@ -199,6 +195,11 @@ def run_bot():
                         
                 except Exception as e:
                     print(f"❌ Lỗi xử lý tin: {str(e)}")
+                    traceback.print_exc()
+
+        except Exception as e:
+            print(f"❌ Lỗi quét trang {page}: {str(e)}")
+            traceback.print_exc()
 
     print(f"\n🎉 XONG! Đã thu hoạch: {da_xu_ly} jobs.")
 
