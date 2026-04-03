@@ -1,7 +1,7 @@
-import os, sys, re, time, requests, json, random
-from curl_cffi import requests as curl_requests
+import os, sys, re, time, requests, json
 from bs4 import BeautifulSoup
 from supabase import create_client
+from playwright.sync_api import sync_playwright
 
 # ================= 1. CẤU HÌNH HỆ THỐNG =================
 def check_config():
@@ -35,29 +35,29 @@ def tao_slug(s):
     s = re.sub(r'\s+', '-', s)
     return re.sub(r'-+', '-', s).strip('-')
 
-# Sinh User-Agent ngẫu nhiên để tàng hình
-def get_random_header():
-    uas = [
-        '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-        '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
-        '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"'
-    ]
-    return {
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-        "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Cache-Control": "max-age=0",
-        "Priority": "u=0, i",
-        "Sec-Ch-Ua": random.choice(uas),
-        "Sec-Ch-Ua-Mobile": "?0",
-        "Sec-Ch-Ua-Platform": '"Windows"',
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "none",
-        "Sec-Fetch-User": "?1",
-        "Upgrade-Insecure-Requests": "1"
-    }
+# ================= 2. VŨ KHÍ TỐI THƯỢNG: TRÌNH DUYỆT ẢO =================
+def lay_html_vuot_rao(url):
+    print(f"   [+] Mở Chrome ẩn danh để lách Cloudflare: {url[-40:]}...")
+    html_content = ""
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            viewport={"width": 1920, "height": 1080}
+        )
+        page = context.new_page()
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=60000)
+            # Chờ 5 giây để trình duyệt tự động giải bài toán JS của Cloudflare
+            page.wait_for_timeout(5000) 
+            html_content = page.content()
+        except Exception as e:
+            print(f"   [!] Lỗi khi load trang: {str(e)}")
+        finally:
+            browser.close()
+    return html_content
 
-# ================= 2. AI BIÊN TẬP =================
+# ================= 3. AI BIÊN TẬP =================
 def ai_analyze_job(url_goc, text_tho):
     print(f"🤖 Đang gửi dữ liệu ({len(text_tho)} ký tự) nhờ AI bóc tách...")
     url = "https://api.groq.com/openai/v1/chat/completions"
@@ -107,20 +107,17 @@ def ai_analyze_job(url_goc, text_tho):
                     print(f"  ⚠️ Key/Model [{model_name}] bị Rate Limit. Đang chuyển súng...")
                     continue 
                 else:
-                    err_msg = res_json.get('error', {}).get('message', 'Lỗi không xác định')
-                    print(f"  ⚠️ Lỗi [{model_name}]: {err_msg}")
                     continue
-            except Exception as e:
-                print(f"  ⚠️ Lỗi kết nối [{model_name}]: {str(e)}")
+            except Exception:
                 continue 
 
-    print("⏳ AI cạn kiệt, ép Bot ngủ 60s...")
+    print("⏳ Toàn bộ băng đạn AI đều đã cạn kiệt, ép Bot ngủ 60s hồi máu...")
     time.sleep(60)
     return None
 
-# ================= 3. QUY TRÌNH QUÉT =================
+# ================= 4. QUY TRÌNH QUÉT CHÍNH =================
 def run_bot():
-    print("🚀 BẮT ĐẦU CÀO VIỆC LÀM 24H (LÀO CAI)")
+    print("🚀 BẮT ĐẦU CÀO VIỆC LÀM 24H (CHẾ ĐỘ TRÌNH DUYỆT ẢO)")
     print(f"🔫 Số lượng API Key đã nạp: {len(GROQ_KEYS)} keys.")
     
     print("🗄️ Đang tải dữ liệu Két sắt để dựng khiên...")
@@ -136,18 +133,15 @@ def run_bot():
     base_url = "https://vieclam24h.vn/viec-lam-lao-cai-p78.html"
     da_xu_ly = 0
 
-    for page in range(1, 4): 
+    # Lần này chỉ cần cày 1 trang duy nhất vì sếp báo chỉ có 1 trang
+    for page in range(1, 2): 
         url_page = f"{base_url}?page={page}"
         print(f"\n🌍 ĐANG QUÉT TRANG {page}: {url_page}")
         
         try:
-            # Dùng áo tàng hình ở đây
-            res = curl_requests.get(url_page, impersonate="chrome120", headers=get_random_header(), timeout=30)
-            if res.status_code != 200:
-                print(f"⚠️ Web từ chối truy cập (Mã lỗi {res.status_code}). Đang bị chặn!")
-                continue
-
-            soup = BeautifulSoup(res.content, 'html.parser')
+            # Dùng xe tăng để húc cổng
+            html_page = lay_html_vuot_rao(url_page)
+            soup = BeautifulSoup(html_page, 'html.parser')
             
             links = []
             for a in soup.find_all('a', href=True):
@@ -165,12 +159,11 @@ def run_bot():
                 
                 print(f"\n--- 🔎 ĐANG SOI: {detail_url[-50:]} ---")
                 try:
-                    # Mặc áo tàng hình soi chi tiết
-                    res_dt = curl_requests.get(detail_url, impersonate="chrome120", headers=get_random_header(), timeout=30)
-                    soup_dt = BeautifulSoup(res_dt.content, 'html.parser')
+                    # Lại dùng xe tăng húc cổng để lấy chi tiết
+                    html_dt = lay_html_vuot_rao(detail_url)
+                    soup_dt = BeautifulSoup(html_dt, 'html.parser')
                     
                     text_tho = soup_dt.get_text(separator="\n", strip=True)
-                    
                     meta_img = soup_dt.find("meta", property="og:image")
                     hinh_anh = [meta_img["content"]] if meta_img and meta_img.get("content") else []
 
@@ -204,15 +197,8 @@ def run_bot():
                         da_xu_ly += 1
                         print(f"✅ ĐÃ LƯU: {tieu_de[:40]}...")
                         
-                    time.sleep(5) 
                 except Exception as e:
                     print(f"❌ Lỗi xử lý tin: {str(e)}")
-
-            print(f"Đã xong trang {page}. Nghỉ mệt 10s...")
-            time.sleep(10)
-
-        except Exception as e:
-            print(f"❌ Lỗi trang {page}: {e}")
 
     print(f"\n🎉 XONG! Đã thu hoạch: {da_xu_ly} jobs.")
 
