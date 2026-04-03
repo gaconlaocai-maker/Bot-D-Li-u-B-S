@@ -40,9 +40,9 @@ def tao_slug(s):
     s = re.sub(r'\s+', '-', s)
     return re.sub(r'-+', '-', s).strip('-')
 
-# ================= 2. AI BIÊN TẬP (PROMPT HẠNG NẶNG + TRÁNH RATE LIMIT) =================
+# ================= 2. AI BIÊN TẬP (AUTO-SWITCH 3 MODEL KHỦNG) =================
 def ai_analyze_bds(tieu_de, ngu_canh_tho):
-    print(f"🤖 Đang ép AI vắt óc viết bài SEO chi tiết (Độ dài: {len(ngu_canh_tho)} ký tự)...")
+    print(f"🤖 Đang chuẩn bị gửi dữ liệu (Độ dài: {len(ngu_canh_tho)} ký tự) cho AI...")
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     
@@ -64,31 +64,44 @@ def ai_analyze_bds(tieu_de, ngu_canh_tho):
         f"--- Mô tả gốc: {ngu_canh_tho}"
     )
     
-    payload = {
-        "model": "llama-3.3-70b-versatile",
-        "messages": [{"role": "user", "content": prompt}],
-        "response_format": { "type": "json_object" },
-        "temperature": 0.3 
-    }
-    
-    try:
-        res = requests.post(url, headers=headers, json=payload, timeout=30)
-        res_json = res.json()
+    # Băng đạn AI với 3 con mạnh nhất theo thứ tự ưu tiên
+    danh_sach_models = [
+        "gpt-oss-120b",
+        "llama-4-scout",
+        "llama-3.3-70b-versatile"
+    ]
+
+    for model_name in danh_sach_models:
+        print(f"  👉 Đang nhờ AI [{model_name}] vắt óc viết bài...")
+        payload = {
+            "model": model_name,
+            "messages": [{"role": "user", "content": prompt}],
+            "response_format": { "type": "json_object" },
+            "temperature": 0.3 
+        }
         
-        # [ĐÃ NÂNG CẤP]: Bắt mạch lỗi Rate Limit của Groq API
-        if 'choices' in res_json:
-            ai_res = json.loads(res_json['choices'][0]['message']['content'])
-            print("✅ AI đã sáng tác xong bài PR dài dặn, giữ nguyên số liệu.")
-            return ai_res
-        else:
-            print(f"⚠️ Groq API phàn nàn: {res_json}")
-            print("⏳ Đang ép Bot ngủ 60s để hồi phục Rate Limit (Hạn ngạch Token)...")
-            time.sleep(60)
-            return None
+        try:
+            res = requests.post(url, headers=headers, json=payload, timeout=35)
+            res_json = res.json()
             
-    except Exception as e:
-        print(f"⚠️ Lỗi kết nối AI Groq: {str(e)}")
-        return None
+            if 'choices' in res_json:
+                ai_res = json.loads(res_json['choices'][0]['message']['content'])
+                print(f"  ✅ AI [{model_name}] đã sáng tác xong siêu phẩm!")
+                return ai_res
+            else:
+                error_msg = res_json.get('error', {}).get('message', 'Lỗi không xác định')
+                print(f"  ⚠️ [{model_name}] gặp sự cố/hết hạn ngạch: {error_msg}")
+                print("  🔄 Tự động rút súng dự phòng, chuyển sang Model tiếp theo...")
+                continue # Nhảy sang model tiếp theo trong danh sách
+                
+        except Exception as e:
+            print(f"  ⚠️ Lỗi kết nối mạng với [{model_name}]: {str(e)}")
+            continue 
+
+    # Nếu xui xẻo cả 3 con đều sập hoặc hết Token
+    print("⏳ Cả 3 AI khủng đều đã cạn kiệt. Bắt buộc ép Bot đi ngủ 60s để hồi máu...")
+    time.sleep(60)
+    return None
 
 # ================= 3. XỬ LÝ HÌNH ẢNH =================
 def process_image(url_goc, slug):
@@ -113,7 +126,7 @@ def process_image(url_goc, slug):
 # ================= 4. QUY TRÌNH QUÉT CHÍNH (ĐA TRANG) =================
 def run_bot():
     base_url = "https://batdongsan.com.vn/nha-dat-ban-sa-pa-lca"
-    print("🚀 BẮT ĐẦU CHẾ ĐỘ CÀO DIỆN RỘNG (PROMPT HẠNG NẶNG)")
+    print("🚀 BẮT ĐẦU CHẾ ĐỘ CÀO DIỆN RỘNG (AUTO-SWITCH 3 MODEL KHỦNG)")
     
     da_xu_ly = 0
     trang_bat_dau = 1
