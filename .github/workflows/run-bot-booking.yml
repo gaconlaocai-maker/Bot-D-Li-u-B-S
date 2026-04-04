@@ -18,7 +18,7 @@ jobs:
       - name: Cài đặt thư viện
         run: |
           python -m pip install --upgrade pip
-          pip install supabase requests
+          pip install supabase requests cloudinary
 
       - name: Thực thi Bot Booking
         run: python bot_booking.py
@@ -27,3 +27,4 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+          CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
