@@ -17,6 +17,16 @@ if not GROQ_KEYS:
     print("❌ Lỗi: Không tìm thấy GROQ_API_KEY nào hợp lệ!")
     sys.exit(1)
 
+vi_tri_groq_key = 0 # Biến toàn cục theo dõi Key hiện tại
+
+# Băng đạn 4 Model cực phẩm của Groq (Xếp từ thông minh nhất đến nhanh nhất)
+DANH_SACH_MODELS_AI = [
+    "openai/gpt-oss-120b",     # Quái vật 120 tỷ tham số, thông minh số 1
+    "llama-3.3-70b-versatile", # Quái vật 70 tỷ của Meta, văn phong mượt mà
+    "openai/gpt-oss-20b",      # Đệ cứng 20 tỷ tham số
+    "llama-3.1-8b-instant"     # Máy bay phản lực 8 tỷ tham số, cứu cánh cuối cùng
+]
+
 CHOTOT_COOKIE = os.environ.get("CHOTOT_COOKIE", "")
 supabase = create_client(os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_KEY"))
 
@@ -34,40 +44,73 @@ def tao_slug(s):
     s = re.sub(r'\s+', '-', s)
     return re.sub(r'-+', '-', s).strip('-')
 
+# ================= 2. AI BIÊN TẬP (AUTO-SWITCH KEYS & MODELS) =================
 def ai_analyze_job(text_tho):
+    global vi_tri_groq_key
     if len(text_tho) < 50: return None
-    print(f"🤖 Đang nhờ AI tút tát lại nội dung...")
-    url = "https://api.groq.com/openai/v1/chat/completions"
+    print(f"🤖 Đang chuẩn bị gửi dữ liệu Job (Độ dài: {len(text_tho)} ký tự) cho AI...")
     
     prompt = (
-        f"Bạn là Headhunter. Đọc mô tả công việc thô này và trích xuất dữ liệu. KHÔNG BỊA ĐẶT.\n\n"
+        f"Bạn là Headhunter chuyên nghiệp. Đọc mô tả công việc thô này và trích xuất dữ liệu. KHÔNG BỊA ĐẶT.\n\n"
         f"JSON Format:\n"
         f"{{\n"
         f"  \"kinh_nghiem\": \"VD: 1 năm, hoặc Không yêu cầu\",\n"
         f"  \"so_luong\": \"Số lượng (Điền số nguyên)\",\n"
         f"  \"han_nop\": \"Ngày hết hạn (VD: Đang mở)\",\n"
         f"  \"nhan_fomo\": \"VD: Tuyển gấp, Lương cao, Việc nhẹ...\",\n"
-        f"  \"html_clean\": \"Viết lại Mô tả công việc, Yêu cầu, Quyền lợi chuyên nghiệp bằng HTML. Dùng <h3> và <ul>, <li>.\"\n"
+        f"  \"html_clean\": \"Viết lại Mô tả công việc, Yêu cầu, Quyền lợi chuyên nghiệp, rõ ràng bằng HTML. Dùng <h3> và <ul>, <li>.\"\n"
         f"}}\n\n"
         f"--- NỘI DUNG RAW ---\n{text_tho[:8000]}"
     )
     
-    danh_sach_models = ["llama-3.3-70b-versatile", "mixtral-8x7b-32768", "llama-3.1-8b-instant"]
+    url = "https://api.groq.com/openai/v1/chat/completions"
 
-    for api_key in GROQ_KEYS:
-        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-        for model_name in danh_sach_models:
-            payload = { "model": model_name, "messages": [{"role": "user", "content": prompt}], "response_format": { "type": "json_object" }, "temperature": 0.2 }
+    # Vòng lặp quét qua từng Model
+    for model_name in DANH_SACH_MODELS_AI:
+        so_key_da_thu = 0
+        
+        # Vòng lặp quét qua từng Key cho Model hiện tại
+        while so_key_da_thu < len(GROQ_KEYS):
+            key = GROQ_KEYS[vi_tri_groq_key]
+            print(f"  👉 Đang nhờ AI [{model_name}] (dùng Key số {vi_tri_groq_key + 1}) biên tập Job...")
+            
+            headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+            payload = { 
+                "model": model_name, 
+                "messages": [{"role": "user", "content": prompt}], 
+                "response_format": { "type": "json_object" }, 
+                "temperature": 0.2 
+            }
+            
             try:
                 res = requests.post(url, headers=headers, json=payload, timeout=35)
+                
                 if res.status_code == 200:
-                    return json.loads(res.json()['choices'][0]['message']['content'])
-            except: continue 
+                    res_json = res.json()
+                    ai_res = json.loads(res_json['choices'][0]['message']['content'])
+                    print(f"  ✅ AI [{model_name}] đã tút tát Job xong!")
+                    return ai_res
+                else:
+                    res_json = res.json()
+                    error_msg = res_json.get('error', {}).get('message', str(res.status_code))
+                    print(f"  ⚠️ Lỗi Key {vi_tri_groq_key + 1}: {error_msg}")
+                    # Đổi sang Key tiếp theo
+                    vi_tri_groq_key = (vi_tri_groq_key + 1) % len(GROQ_KEYS)
+                    so_key_da_thu += 1
+                    time.sleep(1) # Nghỉ 1 nhịp trước khi thử Key mới
+                    
+            except Exception as e:
+                print(f"  ⚠️ Lỗi mạng với Key {vi_tri_groq_key + 1}: {str(e)}")
+                vi_tri_groq_key = (vi_tri_groq_key + 1) % len(GROQ_KEYS)
+                so_key_da_thu += 1
+                time.sleep(1)
+
+    print("⏳ Oảng rồi! Toàn bộ 4 Model và tất cả các Key đều sập. Trả về rỗng để Bot bỏ qua Job này...")
     return None
 
 # ================= 3. QUY TRÌNH HÚT DATA & MOI SĐT TỪ API =================
 def run_bot():
-    print("🚀 BẮT ĐẦU CÀO DATA VÀ ÉP CHỢ TỐT NHẢ SĐT THẬT TỪ API")
+    print("🚀 BẮT ĐẦU CÀO DATA VÀ ÉP CHỢ TỐT NHẢ SĐT THẬT TỪ API (AUTO-SWITCH AI)")
     
     danh_sach_link_cu = set()
     try:
@@ -161,6 +204,7 @@ def run_bot():
             cong_ty = ad_dt.get('company_name', 'Đang cập nhật')
             dia_diem = ad_dt.get('area_name', 'Lào Cai')
             
+            # GỌI HÀM AI XÀO NẤU MỚI
             ai_data = ai_analyze_job(text_tho)
             
             if ai_data:
