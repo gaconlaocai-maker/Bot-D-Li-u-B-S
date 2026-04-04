@@ -93,7 +93,7 @@ def request_thong_minh(url, params):
             print("❌ Lỗi mạng hoặc kết nối:", e)
             return None
 
-# ================= 2. QUY TRÌNH MÁY XÚC CÀO SẠCH SA PA =================
+# ================= 2. QUY TRÌNH MÁY XÚC CÀO SẠCH =================
 def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
     print(f"\n🚀 KHỞI ĐỘNG MÁY XÚC VÀO THỊ TRƯỜNG: {dia_diem.upper()}")
     print(f"🔫 Đã nạp {len(DANH_SACH_KEYS)} băng đạn API!")
@@ -128,12 +128,17 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
         
         url_search = "https://booking-com.p.rapidapi.com/v1/hotels/search"
         querystring = {
-            "dest_id": dest_id, "search_type": dest_type,
-            "checkin_date": ngay_in, "checkout_date": ngay_out,
-            "adults_number": "2", "room_number": "1",
-            "locale": "vi", "units": "metric",
+            "dest_id": dest_id, 
+            "dest_type": dest_type, # <--- ĐÃ FIX LỖI TẠI ĐÂY NHA SẾP!
+            "checkin_date": ngay_in, 
+            "checkout_date": ngay_out,
+            "adults_number": "2", 
+            "room_number": "1",
+            "locale": "vi", 
+            "units": "metric",
             "order_by": "popularity", 
-            "filter_by_currency": "VND", "page_number": str(page_number) 
+            "filter_by_currency": "VND", 
+            "page_number": str(page_number) 
         }
 
         res_search = request_thong_minh(url_search, params=querystring)
