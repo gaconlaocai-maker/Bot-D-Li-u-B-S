@@ -10,13 +10,13 @@ RAPIDAPI_KEYS_STR = os.environ.get("RAPIDAPI_KEY", "")
 GROQ_KEYS_STR = os.environ.get("GROQ_API_KEY", "")
 
 if not RAPIDAPI_KEYS_STR or not GROQ_KEYS_STR:
-    print("❌ LỖI: Thiếu RAPIDAPI_KEY hoặc GROQ_API_KEY trong Github Secrets!")
+    print("❌ LỖI: Thiếu RAPIDAPI_KEY hoặc GROQ_API_KEY. Sếp check lại Github Secrets và file .yml nhé!")
     exit()
 
 DANH_SACH_RAPID_KEYS = [k.strip() for k in RAPIDAPI_KEYS_STR.split(",") if k.strip()]
 DANH_SACH_GROQ_KEYS = [k.strip() for k in GROQ_KEYS_STR.split(",") if k.strip()]
 
-# 🔥 ĐÃ CẬP NHẬT 3 MODEL XỊN NHẤT TỪ BẢNG CỦA SẾP
+# 3 Model xịn nhất của Groq hiện tại
 DANH_SACH_MODELS_AI = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"]
 
 vi_tri_rapid_key = 0
@@ -72,8 +72,8 @@ def request_thong_minh(url, params):
         except:
             return None
 
-# ================= CƠ CHẾ AI GROQ TỰ ĐỘNG CHUYỂN ĐẠN & MODEL =================
-def phan_tich_loai_phong_bang_ai(ten_phong, vi_tri, mo_ta, link_goc):
+# ================= CƠ CHẾ AI XÀO NẤU CONTENT ĐA NĂNG =================
+def xao_nau_content_bang_ai(ten_phong, vi_tri, mo_ta_goc, chuoi_tien_ich, link_goc):
     global vi_tri_groq_key
     
     html_text = ""
@@ -81,40 +81,60 @@ def phan_tich_loai_phong_bang_ai(ten_phong, vi_tri, mo_ta, link_goc):
         req_html = requests.get(link_goc, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
         if req_html.status_code == 200:
             clean = re.sub(r'<[^>]+>', ' ', req_html.text)
-            html_text = re.sub(r'\s+', ' ', clean)[:3000] 
+            html_text = re.sub(r'\s+', ' ', clean)[:2000] 
     except: pass
 
-    prompt = f"""Bạn là trợ lý AI phân tích dữ liệu khách sạn. Hãy tìm các HẠNG PHÒNG (Room types) của "{ten_phong}" tại "{vi_tri}".
-    Mô tả: {mo_ta[:1000]}
-    Nội dung web: {html_text}
-    Dựa vào thông tin trên, trả về danh sách các hạng phòng. 
-    QUY TẮC BẮT BUỘC: CHỈ trả về đúng 1 chuỗi các tên hạng phòng, cách nhau bằng dấu phẩy. KHÔNG gạch đầu dòng, KHÔNG giải thích thêm. (VD: Phòng Deluxe, Suite Executive, Phòng Tiêu Chuẩn)
-    """
+    # Nhồi prompt để AI đóng vai Copywriter + Data Extractor
+    prompt = f"""Bạn là một Copywriter và Chuyên gia SEO mảng Du lịch Khách sạn. 
+Hãy xử lý thông tin của khách sạn "{ten_phong}" tại "{vi_tri}".
+Dữ liệu gốc (Không được bịa đặt sai sự thật về tiện ích và vị trí):
+- Tiện ích: {chuoi_tien_ich}
+- Mô tả thô: {mo_ta_goc[:1000]}
+- HTML thô (dùng để tìm hạng phòng): {html_text}
+
+Nhiệm vụ của bạn:
+1. Viết 1 Tiêu đề SEO (meta_title) thật hấp dẫn, giật tít, chứa tên KS (dưới 65 ký tự).
+2. Viết 1 Mô tả SEO (meta_desc) ngắn gọn để kích thích click (dưới 155 ký tự).
+3. Viết lại Mô tả chi tiết (mo_ta) dài khoảng 2-3 đoạn. Văn phong bay bổng, lôi cuốn, review chân thực trải nghiệm và nhấn mạnh vào các tiện ích có thật ở trên. Khách hàng đọc xong phải muốn đặt phòng ngay.
+4. Trích xuất chính xác các HẠNG PHÒNG (Room types) có nhắc đến trong mô tả hoặc HTML, cách nhau bằng dấu phẩy.
+
+BẮT BUỘC trả về đúng định dạng có các tag sau (Không giải thích thêm):
+[TITLE]...[/TITLE]
+[META]...[/META]
+[DESC]...[/DESC]
+[ROOMS]...[/ROOMS]"""
 
     for model in DANH_SACH_MODELS_AI:
         so_key_da_thu = 0
         while so_key_da_thu < len(DANH_SACH_GROQ_KEYS):
             key = DANH_SACH_GROQ_KEYS[vi_tri_groq_key]
             url = "https://api.groq.com/openai/v1/chat/completions"
-            headers = {
-                "Authorization": f"Bearer {key}",
-                "Content-Type": "application/json"
-            }
+            headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
             payload = {
                 "model": model,
                 "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.1, 
-                "max_tokens": 150
+                "temperature": 0.4, # Tăng sáng tạo lên một chút để viết văn hay hơn
+                "max_tokens": 800
             }
 
             try:
-                res = requests.post(url, headers=headers, json=payload, timeout=10)
+                res = requests.post(url, headers=headers, json=payload, timeout=15)
                 
                 if res.status_code == 200:
                     data = res.json()
                     text_tra_ve = data['choices'][0]['message']['content'].strip()
-                    return text_tra_ve.replace('*', '').replace('\n', '').replace('"', '').strip()
-                
+                    
+                    # Bóc tách dữ liệu AI trả về bằng Regex
+                    try:
+                        title = re.search(r'\[TITLE\](.*?)\[/TITLE\]', text_tra_ve, re.DOTALL).group(1).strip()
+                        meta = re.search(r'\[META\](.*?)\[/META\]', text_tra_ve, re.DOTALL).group(1).strip()
+                        desc = re.search(r'\[DESC\](.*?)\[/DESC\]', text_tra_ve, re.DOTALL).group(1).strip()
+                        rooms = re.search(r'\[ROOMS\](.*?)\[/ROOMS\]', text_tra_ve, re.DOTALL).group(1).strip()
+                        return {"title": title, "meta": meta, "desc": desc, "rooms": rooms}
+                    except:
+                        # Nếu AI lú, trả về format sai, thì bắt lỗi và thử lại model khác
+                        break
+
                 elif res.status_code in [429, 401, 403]: 
                     print(f"   ⚠️ Groq Key {vi_tri_groq_key+1} kiệt sức/lỗi, chuyển key...")
                     vi_tri_groq_key = (vi_tri_groq_key + 1) % len(DANH_SACH_GROQ_KEYS)
@@ -125,11 +145,17 @@ def phan_tich_loai_phong_bang_ai(ten_phong, vi_tri, mo_ta, link_goc):
                 vi_tri_groq_key = (vi_tri_groq_key + 1) % len(DANH_SACH_GROQ_KEYS)
                 so_key_da_thu += 1
                 
-    return "Đa dạng các hạng phòng cao cấp và tiêu chuẩn" 
+    # Fallback nếu AI sụp hoàn toàn
+    return {
+        "title": f"Đặt phòng {ten_phong} - Giá Ưu Đãi Nhất", 
+        "meta": (f"Trải nghiệm {ten_phong} tại {vi_tri}. " + mo_ta_goc)[:150] + "...", 
+        "desc": mo_ta_goc, 
+        "rooms": "Đa dạng các hạng phòng tiêu chuẩn và cao cấp"
+    }
 
-# ================= 3. MÁY XÚC SIÊU TỐC =================
+# ================= 3. MÁY XÚC FULL QUY TRÌNH =================
 def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
-    print(f"\n🚀 KHỞI ĐỘNG MÁY XÚC: {dia_diem.upper()} (GROQ AI ĐỌC TÊN PHÒNG)")
+    print(f"\n🚀 KHỞI ĐỘNG MÁY XÚC: {dia_diem.upper()} (AI GROQ SÁNG TẠO CONTENT ĐỈNH CAO)")
     print("="*60)
 
     url_loc = "https://booking-com.p.rapidapi.com/v1/hotels/locations"
@@ -184,7 +210,7 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
             except: pass
 
             try:
-                # 1. MOI ẢNH BẢO VỆ UY TÍN (Giới hạn 15 ảnh xịn nhất)
+                # 1. MOI ẢNH (Bơm lên Cloudinary)
                 url_photos = "https://booking-com.p.rapidapi.com/v1/hotels/photos"
                 res_photos = request_thong_minh(url_photos, params={"hotel_id": hotel_id, "locale": "vi"})
                 hinh_anh_moi = []
@@ -194,10 +220,10 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
                         url_anh = photo.get('url_max') or photo.get('url_square60', '')
                         if url_anh: hinh_anh_moi.append(upload_len_cloud(url_anh.replace('square60', 'max1280x900')))
 
-                # 2. MOI MÔ TẢ & TIỆN ÍCH
+                # 2. MOI MÔ TẢ GỐC & TIỆN ÍCH
                 url_desc = "https://booking-com.p.rapidapi.com/v1/hotels/description"
                 res_desc = request_thong_minh(url_desc, params={"hotel_id": hotel_id, "locale": "vi"})
-                mo_ta = res_desc.get('description', f'Kỳ nghỉ tuyệt vời tại {ten_phong}.') if isinstance(res_desc, dict) else ""
+                mo_ta_goc = res_desc.get('description', f'Kỳ nghỉ tuyệt vời tại {ten_phong}.') if isinstance(res_desc, dict) else ""
 
                 url_facilities = "https://booking-com.p.rapidapi.com/v1/hotels/facilities"
                 res_fac = request_thong_minh(url_facilities, params={"hotel_id": hotel_id, "locale": "vi"})
@@ -208,10 +234,10 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
                         if name: tap_hop_tien_ich.add(name)
                 chuoi_tien_ich = ", ".join(list(tap_hop_tien_ich)) if tap_hop_tien_ich else "Wifi miễn phí, Lễ tân 24h"
 
-                # 3. 🤖 GỌI AI GROQ
-                print("   🤖 Đang thả Groq AI đi lùng sục tên phòng...")
-                chuoi_loai_phong = phan_tich_loai_phong_bang_ai(ten_phong, vi_tri, mo_ta, link_goc)
-                print(f"   🎯 Groq chốt đơn: {chuoi_loai_phong[:70]}...")
+                # 3. 🤖 GỌI AI GROQ NHÀO NẶN CONTENT
+                print("   🤖 Đang thả Groq AI làm Copywriter...")
+                ai_data = xao_nau_content_bang_ai(ten_phong, vi_tri, mo_ta_goc, chuoi_tien_ich, link_goc)
+                print(f"   🎯 AI viết Tiêu đề: {ai_data['title']}")
 
                 chuoi_suc_chua = "Tùy hạng phòng (Vui lòng liên hệ)"
                 chuoi_loai_giuong = "Giường đơn/đôi cỡ lớn (Tùy chọn)"
@@ -219,15 +245,23 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
                 # 4. ĐÓNG GÓI INSERT
                 slug = tao_slug(ten_phong)[:50] + "-" + str(int(time.time()))
                 data_insert = {
-                    "tieu_de": ten_phong, "slug": slug, "vi_tri": vi_tri, "loai_bds": loai_bds,
-                    "gia": gia_text, "hinh_anh": hinh_anh_moi if hinh_anh_moi else [],
-                    "mo_ta": mo_ta, "nhan_fomo": random.choice(DANH_SACH_FOMO),
-                    "meta_title": f"Đặt phòng {ten_phong} - Giá Tốt Nhất",
-                    "meta_desc": (f"Trải nghiệm {ten_phong} tại {vi_tri}. " + mo_ta)[:155] + "...",
-                    "loai_phong": chuoi_loai_phong, "suc_chua": chuoi_suc_chua, "loai_giuong": chuoi_loai_giuong,
+                    "tieu_de": ten_phong, 
+                    "slug": slug, 
+                    "vi_tri": vi_tri, 
+                    "loai_bds": loai_bds,
+                    "gia": gia_text, 
+                    "hinh_anh": hinh_anh_moi if hinh_anh_moi else [],
+                    "mo_ta": ai_data['desc'], # <--- Mô tả đã xào nấu
+                    "nhan_fomo": random.choice(DANH_SACH_FOMO),
+                    "meta_title": ai_data['title'], # <--- Tiêu đề SEO đã xào nấu
+                    "meta_desc": ai_data['meta'],   # <--- Meta Desc đã xào nấu
+                    "loai_phong": ai_data['rooms'], # <--- Tên phòng trích xuất
+                    "suc_chua": chuoi_suc_chua, 
+                    "loai_giuong": chuoi_loai_giuong,
                     "tien_ich": chuoi_tien_ich,  
                     "map_url": link_map,         
-                    "trang_thai": "Còn phòng", "dien_tich": random.choice([20, 25, 30, 40, 50])
+                    "trang_thai": "Còn phòng", 
+                    "dien_tich": random.choice([20, 25, 30, 40, 50])
                 }
 
                 supabase.table("phong_nghi").insert(data_insert).execute()
