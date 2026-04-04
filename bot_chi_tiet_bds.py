@@ -24,6 +24,14 @@ if not DANH_SACH_GROQ_KEYS:
 
 vi_tri_groq_key = 0 # Biến toàn cục theo dõi Key hiện tại
 
+# Băng đạn 4 Model cực phẩm của Groq (Xếp từ thông minh nhất đến nhanh nhất)
+DANH_SACH_MODELS_AI = [
+    "openai/gpt-oss-120b",     # Quái vật 120 tỷ tham số, thông minh số 1
+    "llama-3.3-70b-versatile", # Quái vật 70 tỷ của Meta, văn phong mượt mà
+    "openai/gpt-oss-20b",      # Đệ cứng 20 tỷ tham số, cân bằng giữa tốc độ & trí tuệ
+    "llama-3.1-8b-instant"     # Máy bay phản lực 8 tỷ tham số, cứu cánh cuối cùng
+]
+
 supabase = create_client(os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_KEY"))
 cloudinary.config(cloudinary_url=os.environ.get("CLOUDINARY_URL"))
 
@@ -72,11 +80,8 @@ def ai_analyze_bds(tieu_de, ngu_canh_tho):
         f"--- Mô tả gốc: {ngu_canh_tho}"
     )
     
-    # Băng đạn 3 Model xịn nhất của Groq
-    danh_sach_models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"]
-
     # Vòng lặp quét qua từng Model
-    for model_name in danh_sach_models:
+    for model_name in DANH_SACH_MODELS_AI:
         so_key_da_thu = 0
         
         # Vòng lặp quét qua từng Key cho Model hiện tại
@@ -116,7 +121,7 @@ def ai_analyze_bds(tieu_de, ngu_canh_tho):
                 so_key_da_thu += 1
                 time.sleep(1)
 
-    print("⏳ Oảng rồi! Toàn bộ Model và Key đều sập. Trả về rỗng để Bot bỏ qua bài này...")
+    print("⏳ Oảng rồi! Toàn bộ 4 Model và tất cả các Key đều sập. Trả về rỗng để Bot bỏ qua bài này...")
     return None
 
 # ================= 3. XỬ LÝ HÌNH ẢNH =================
@@ -142,7 +147,7 @@ def process_image(url_goc, slug):
 # ================= 4. QUY TRÌNH QUÉT CHÍNH (ĐA TRANG) =================
 def run_bot():
     base_url = "https://batdongsan.com.vn/nha-dat-ban-sa-pa-lca"
-    print("🚀 BẮT ĐẦU CHẾ ĐỘ CÀO BĐS (AUTO-SWITCH KEYS & MODELS)")
+    print("🚀 BẮT ĐẦU CHẾ ĐỘ CÀO BĐS (AUTO-SWITCH KEYS & 4 MODELS KHỦNG)")
     
     da_xu_ly = 0
     trang_bat_dau = 1
