@@ -45,7 +45,7 @@ def upload_len_cloud(image_url):
     except:
         return image_url
 
-# ================= CƠ CHẾ THAY ĐẠN TỰ ĐỘNG =================
+# ================= CƠ CHẾ THAY ĐẠN TỰ ĐỘNG ĐÃ NÂNG CẤP =================
 def request_thong_minh(url, params):
     global vi_tri_key_hien_tai
     
@@ -58,7 +58,7 @@ def request_thong_minh(url, params):
         try:
             res = requests.get(url, headers=headers, params=params)
             
-            # 429 là mã lỗi "Too Many Requests" (Hết hạn ngạch)
+            # 1. Báo lỗi hết hạn ngạch (429) hoặc vượt quá limit (403 + exceeded)
             if res.status_code == 429 or (res.status_code == 403 and "exceeded" in res.text.lower()):
                 print(f"⚠️ API Key số {vi_tri_key_hien_tai + 1} đã CẠN KIỆT!")
                 vi_tri_key_hien_tai += 1
@@ -68,7 +68,24 @@ def request_thong_minh(url, params):
                     return None
                 
                 print(f"🔄 TỰ ĐỘNG THAY ĐẠN: Chuyển sang API Key số {vi_tri_key_hien_tai + 1}...")
-                continue # Vòng lại gọi API với Key mới
+                continue 
+            
+            # 2. Báo lỗi do CHƯA SUBSCRIBE gói Free trên RapidAPI
+            if res.status_code == 403 and "subscribe" in res.text.lower():
+                print(f"❌ LỖI NGHIÊM TRỌNG: API Key số {vi_tri_key_hien_tai + 1} CHƯA ĐƯỢC BẤM SUBSCRIBE GÓI FREE TRÊN RAPIDAPI!")
+                vi_tri_key_hien_tai += 1
+                
+                if vi_tri_key_hien_tai >= len(DANH_SACH_KEYS):
+                    print("❌ TOÀN BỘ API KEYS ĐỀU LỖI HOẶC HẾT ĐẠN!")
+                    return None
+                    
+                print(f"🔄 TỰ ĐỘNG THAY ĐẠN: Chuyển sang API Key số {vi_tri_key_hien_tai + 1}...")
+                continue
+
+            # 3. Lỗi lạ từ server Booking
+            if res.status_code != 200:
+                print(f"⚠️ LỖI MẠNG BOOKING (Mã {res.status_code}): {res.text}")
+                return None
             
             return res.json()
             
@@ -124,8 +141,9 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
         
         hotels = res_search.get('result', [])
 
-        # Nếu trang này không còn khách sạn nào -> Thoát vòng lặp
+        # Nếu trang này không còn khách sạn nào -> Bắt bệnh và Thoát
         if not hotels:
+            print(f"⚠️ CẢNH BÁO: API không trả về danh sách khách sạn! Dữ liệu nhận được: {res_search}")
             print(f"🏁 Đã vét cạn kiệt cơ sở lưu trú tại {dia_diem}!")
             break
 
@@ -165,7 +183,7 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
                 # ---> MOI MÔ TẢ
                 url_desc = "https://booking-com.p.rapidapi.com/v1/hotels/description"
                 res_desc = request_thong_minh(url_desc, params={"hotel_id": hotel_id, "locale": "vi"})
-                mo_ta = res_desc.get('description', f'Kỳ nghỉ dưỡng tuyệt vời tại {ten_phong}.') if res_desc else ""
+                mo_ta = res_desc.get('description', f'Kỳ nghỉ dưỡng tuyệt vời tại {ten_phong}.') if isinstance(res_desc, dict) else ""
 
                 # ---> MOI LOẠI PHÒNG
                 url_rooms = "https://booking-com.p.rapidapi.com/v1/hotels/room-list"
