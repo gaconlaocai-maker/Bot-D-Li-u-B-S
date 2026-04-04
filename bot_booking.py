@@ -69,9 +69,9 @@ def request_thong_minh(url, params):
         except:
             return None
 
-# ================= 2. MÁY XÚC VÉT CẠN =================
+# ================= 2. MÁY XÚC VÉT CẠN (CHỈ LẤY TÊN PHÒNG HẠNG SANG) =================
 def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
-    print(f"\n🚀 KHỞI ĐỘNG MÁY XÚC: {dia_diem.upper()} (ĐÃ TỐI ƯU CÀO GIƯỜNG)")
+    print(f"\n🚀 KHỞI ĐỘNG MÁY XÚC: {dia_diem.upper()} (TẬP TRUNG LẤY TÊN HẠNG PHÒNG LÀM MỒI)")
     print("="*60)
 
     url_loc = "https://booking-com.p.rapidapi.com/v1/hotels/locations"
@@ -87,7 +87,7 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
                 break
     if not dest_id: return
 
-    # 🔥 CHIẾN THUẬT MỚI: Đẩy ngày Check-in ra xa 30 ngày để đảm bảo 100% Khách sạn còn phòng trống
+    # Đẩy ngày Check-in ra xa 30 ngày để đảm bảo Khách sạn còn phòng trống trên API
     ngay_in = (datetime.datetime.now() + datetime.timedelta(days=30)).strftime("%Y-%m-%d")
     ngay_out = (datetime.datetime.now() + datetime.timedelta(days=31)).strftime("%Y-%m-%d")
 
@@ -119,7 +119,9 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
             ten_phong = hotel.get('hotel_name', 'Chưa rõ tên')
             vi_tri = hotel.get('address', dia_diem) + ", " + hotel.get('city_trans', dia_diem)
             gia_tien = hotel.get('min_total_price', 0)
-            gia_text = f"{int(gia_tien):,} đ/đêm" if gia_tien > 0 else "Liên hệ"
+            
+            # Đổi giá thành "Liên hệ" hoặc giữ nguyên giá thấp nhất làm giá mồi
+            gia_text = f"Chỉ từ {int(gia_tien):,} đ/đêm" if gia_tien > 0 else "Liên hệ để nhận báo giá"
             loai_bds = hotel.get('accommodation_type_name', 'Khách sạn')
             
             lat = hotel.get('latitude')
@@ -136,7 +138,7 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
             except: pass
 
             try:
-                # ---> MOI ẢNH
+                # ---> MOI ẢNH FULL
                 url_photos = "https://booking-com.p.rapidapi.com/v1/hotels/photos"
                 res_photos = request_thong_minh(url_photos, params={"hotel_id": hotel_id, "locale": "vi"})
                 hinh_anh_moi = []
@@ -160,7 +162,7 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
                         if name: tap_hop_tien_ich.add(name)
                 chuoi_tien_ich = ", ".join(list(tap_hop_tien_ich)) if tap_hop_tien_ich else "Wifi miễn phí, Chỗ để xe, Lễ tân 24h"
 
-                # ---> 🔥 BÓC TÁCH PHÒNG & GIƯỜNG (SIÊU CẤP)
+                # ---> 🔥 BÓC TÁCH TÊN LOẠI PHÒNG (Nhanh, gọn, lẹ)
                 url_rooms = "https://booking-com.p.rapidapi.com/v1/hotels/room-list"
                 params_room = {
                     "hotel_id": hotel_id, "checkin_date": ngay_in, "checkout_date": ngay_out, 
@@ -168,41 +170,20 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
                 }
                 res_rooms = request_thong_minh(url_rooms, params=params_room)
 
-                tap_hop_ten_phong, tap_hop_giuong = set(), set()
-                max_nguoi = 2
-                
+                tap_hop_ten_phong = set()
                 if isinstance(res_rooms, list):
                     for room in res_rooms:
-                        # 1. Lấy Tên phòng
                         r_name = room.get('room_name')
-                        if r_name: tap_hop_ten_phong.add(r_name)
-                        
-                        # 2. Lấy Sức chứa lớn nhất
-                        if room.get('max_persons', 0) > max_nguoi: 
-                            max_nguoi = room.get('max_persons')
-                        
-                        # 3. Lấy cấu hình Giường (Đào sâu vào list)
-                        has_bed = False
-                        if room.get('bed_configurations'):
-                            for bed_config in room['bed_configurations']:
-                                for bed in bed_config.get('bed_types', []):
-                                    b_name = bed.get('name_with_count') or bed.get('description') or bed.get('name')
-                                    if b_name:
-                                        tap_hop_giuong.add(b_name)
-                                        has_bed = True
-                        
-                        # Vét cạn: Nếu API giấu giường, tự nội suy từ Tên phòng
-                        if not has_bed and r_name:
-                            name_lower = r_name.lower()
-                            if 'king' in name_lower or 'cực lớn' in name_lower: tap_hop_giuong.add('1 giường đôi cực lớn (King)')
-                            elif 'queen' in name_lower: tap_hop_giuong.add('1 giường đôi lớn (Queen)')
-                            elif 'đôi' in name_lower or 'double' in name_lower: tap_hop_giuong.add('1 giường đôi')
-                            elif 'đơn' in name_lower or 'twin' in name_lower or '2 giường' in name_lower: tap_hop_giuong.add('2 giường đơn')
+                        if r_name: 
+                            # Cắt bớt phần mô tả rườm rà phía sau chữ " - " nếu có để lấy tên chính xác
+                            clean_name = r_name.split(' - ')[0].strip()
+                            tap_hop_ten_phong.add(clean_name)
 
-                # Gộp chuỗi hiển thị
-                chuoi_loai_phong = ", ".join(list(tap_hop_ten_phong)) if tap_hop_ten_phong else "Đa dạng các hạng phòng"
-                chuoi_suc_chua = f"Từ 1 đến {max_nguoi} người/phòng"
-                chuoi_loai_giuong = ", ".join(list(tap_hop_giuong)) if tap_hop_giuong else "1 giường đôi lớn hoặc 2 giường đơn"
+                chuoi_loai_phong = ", ".join(list(tap_hop_ten_phong)) if tap_hop_ten_phong else "Đa dạng các hạng phòng tiêu chuẩn và cao cấp"
+                
+                # Điền giá trị mặc định cho sức chứa và giường (để sale chốt sau)
+                chuoi_suc_chua = "Theo yêu cầu (Vui lòng liên hệ)"
+                chuoi_loai_giuong = "Theo yêu cầu (Giường đơn/đôi cỡ lớn)"
 
                 # ---> ĐÓNG GÓI INSERT
                 slug = tao_slug(ten_phong)[:50] + "-" + str(int(time.time()))
@@ -220,7 +201,7 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
 
                 supabase.table("phong_nghi").insert(data_insert).execute()
                 tong_da_lay += 1
-                print(f"   ✅ Đã bóc tách giường & tiện ích! (Tiến độ: {tong_da_lay})")
+                print(f"   ✅ Đã chốt tên hạng phòng làm mồi! (Tiến độ: {tong_da_lay})")
 
             except Exception as e:
                 print("❌ Lỗi khi bóc tách chi tiết:", e)
