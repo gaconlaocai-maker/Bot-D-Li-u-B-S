@@ -17,14 +17,14 @@ if not GROQ_KEYS:
     print("❌ Lỗi: Không tìm thấy GROQ_API_KEY nào hợp lệ!")
     sys.exit(1)
 
-vi_tri_groq_key = 0 # Biến toàn cục theo dõi Key hiện tại
+vi_tri_groq_key = 0 
 
-# Băng đạn 4 Model cực phẩm của Groq (Xếp từ thông minh nhất đến nhanh nhất)
+# Băng đạn 4 Model cực phẩm của Groq 
 DANH_SACH_MODELS_AI = [
-    "openai/gpt-oss-120b",     # Quái vật 120 tỷ tham số, thông minh số 1
-    "llama-3.3-70b-versatile", # Quái vật 70 tỷ của Meta, văn phong mượt mà
-    "openai/gpt-oss-20b",      # Đệ cứng 20 tỷ tham số
-    "llama-3.1-8b-instant"     # Máy bay phản lực 8 tỷ tham số, cứu cánh cuối cùng
+    "openai/gpt-oss-120b",     
+    "llama-3.3-70b-versatile", 
+    "openai/gpt-oss-20b",      
+    "llama-3.1-8b-instant"     
 ]
 
 CHOTOT_COOKIE = os.environ.get("CHOTOT_COOKIE", "")
@@ -65,11 +65,8 @@ def ai_analyze_job(text_tho):
     
     url = "https://api.groq.com/openai/v1/chat/completions"
 
-    # Vòng lặp quét qua từng Model
     for model_name in DANH_SACH_MODELS_AI:
         so_key_da_thu = 0
-        
-        # Vòng lặp quét qua từng Key cho Model hiện tại
         while so_key_da_thu < len(GROQ_KEYS):
             key = GROQ_KEYS[vi_tri_groq_key]
             print(f"  👉 Đang nhờ AI [{model_name}] (dùng Key số {vi_tri_groq_key + 1}) biên tập Job...")
@@ -94,10 +91,9 @@ def ai_analyze_job(text_tho):
                     res_json = res.json()
                     error_msg = res_json.get('error', {}).get('message', str(res.status_code))
                     print(f"  ⚠️ Lỗi Key {vi_tri_groq_key + 1}: {error_msg}")
-                    # Đổi sang Key tiếp theo
                     vi_tri_groq_key = (vi_tri_groq_key + 1) % len(GROQ_KEYS)
                     so_key_da_thu += 1
-                    time.sleep(1) # Nghỉ 1 nhịp trước khi thử Key mới
+                    time.sleep(1) 
                     
             except Exception as e:
                 print(f"  ⚠️ Lỗi mạng với Key {vi_tri_groq_key + 1}: {str(e)}")
@@ -123,7 +119,6 @@ def run_bot():
     api_list = "https://gateway.chotot.com/v1/public/ad-listing?cg=13000&q=Lào%20Cai&limit=20"
     da_xu_ly = 0
 
-    # Bóc tách Token từ Cookie của sếp
     id_token = ""
     private_token = ""
     if CHOTOT_COOKIE:
@@ -133,6 +128,10 @@ def run_bot():
         match_private = re.search(r'privateToken=([^;]+)', CHOTOT_COOKIE)
         if match_private: private_token = match_private.group(1)
 
+    # Đếm giờ để tự ngắt
+    thoi_gian_bat_dau = time.time()
+    gioi_han_thoi_gian = 2 * 3600 # 2 tiếng = 7200 giây
+
     try:
         res = requests.get(api_list, timeout=10)
         ads = res.json().get('ads', [])
@@ -141,14 +140,18 @@ def run_bot():
         headers_chotot = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             "Cookie": CHOTOT_COOKIE,
-            # Bơm 2 cái khóa bảo mật này vào thì nó mới chịu nhả SĐT thật
             "Authorization": f"Bearer {id_token}" if id_token else "",
             "cgg": "1"
         }
 
         for ad in ads:
+            # Rơ-le tự ngắt
+            if time.time() - thoi_gian_bat_dau > gioi_han_thoi_gian:
+                print("\n⏱️ ĐÃ CHẠY ĐỦ 2 TIẾNG! BOT TỰ ĐỘNG NGHỈ NGƠI ĐỂ TRÁNH QUÁ TẢI.")
+                return
+
             list_id = ad.get('list_id')
-            account_oid = ad.get('account_oid') # Cần cái này để hỏi SĐT
+            account_oid = ad.get('account_oid') 
             
             detail_url = f"https://www.chotot.com/{list_id}.htm"
             
@@ -166,7 +169,6 @@ def run_bot():
             
             so_dien_thoai = ""
             
-            # 1. Quét thẳng vào mô tả trước (Cách nhanh nhất)
             text_clean = text_tho.replace('.', '').replace(' ', '').replace('-', '')
             phone_match = re.search(r'(0[3|5|7|8|9][0-9]{8})', text_clean)
             
@@ -174,7 +176,6 @@ def run_bot():
                 so_dien_thoai = phone_match.group(1)
                 print(f"   🎯 Bắt được SĐT thật trong mô tả: {so_dien_thoai}")
             else:
-                # 2. Gọi API KÍN của Chợ Tốt để moi SĐT thật
                 if account_oid and private_token:
                     print("   🕵️‍♂️ Đang dùng Thẻ VIP đột nhập kho số...")
                     api_phone = f"https://gateway.chotot.com/v1/public/profile/{account_oid}"
@@ -204,7 +205,6 @@ def run_bot():
             cong_ty = ad_dt.get('company_name', 'Đang cập nhật')
             dia_diem = ad_dt.get('area_name', 'Lào Cai')
             
-            # GỌI HÀM AI XÀO NẤU MỚI
             ai_data = ai_analyze_job(text_tho)
             
             if ai_data:
