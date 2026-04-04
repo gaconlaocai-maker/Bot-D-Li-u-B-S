@@ -1,4 +1,4 @@
-name: Chạy Bot Việc Làm 24h
+name: Chạy Bot Việc Làm Chợ Tốt
 on:
   workflow_dispatch: {} 
 
@@ -19,8 +19,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install requests beautifulsoup4 supabase playwright
-          playwright install chromium --with-deps
+          pip install requests supabase
 
       - name: Thực thi Bot Việc Làm
         run: python bot_vieclam24h.py
