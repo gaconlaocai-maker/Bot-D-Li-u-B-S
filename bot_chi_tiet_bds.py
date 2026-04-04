@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 from supabase import create_client
 from PIL import Image
 
-# ================= 1. CẤU HÌNH HỆ THỐNG =================
+# ================= 1. CẤU HÌNH HỆ THỐNG & DÀN API KEYS =================
 def check_config():
     required_keys = ["GROQ_API_KEY", "SUPABASE_URL", "SUPABASE_KEY", "CLOUDINARY_URL"]
     missing = [k for k in required_keys if not os.environ.get(k)]
@@ -14,7 +14,16 @@ def check_config():
 
 check_config()
 
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+# Lấy dàn Key và tách thành list
+GROQ_KEYS_STR = os.environ.get("GROQ_API_KEY", "")
+DANH_SACH_GROQ_KEYS = [k.strip() for k in GROQ_KEYS_STR.split(",") if k.strip()]
+
+if not DANH_SACH_GROQ_KEYS:
+    print("❌ LỖI: Chưa có API Key nào trong GROQ_API_KEY!")
+    sys.exit(1)
+
+vi_tri_groq_key = 0 # Biến toàn cục theo dõi Key hiện tại
+
 supabase = create_client(os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_KEY"))
 cloudinary.config(cloudinary_url=os.environ.get("CLOUDINARY_URL"))
 
@@ -40,11 +49,10 @@ def tao_slug(s):
     s = re.sub(r'\s+', '-', s)
     return re.sub(r'-+', '-', s).strip('-')
 
-# ================= 2. AI BIÊN TẬP (AUTO-SWITCH 3 MODEL KHỦNG) =================
+# ================= 2. AI BIÊN TẬP (AUTO-SWITCH KEYS & MODELS) =================
 def ai_analyze_bds(tieu_de, ngu_canh_tho):
+    global vi_tri_groq_key
     print(f"🤖 Đang chuẩn bị gửi dữ liệu (Độ dài: {len(ngu_canh_tho)} ký tự) cho AI...")
-    url = "https://api.groq.com/openai/v1/chat/completions"
-    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     
     prompt = (
         f"Bạn là một Siêu Cò BĐS và Chuyên gia Copywriter tại Lào Cai. Hãy đọc kỹ thông tin bài rao bán dưới đây.\n"
@@ -55,51 +63,59 @@ def ai_analyze_bds(tieu_de, ngu_canh_tho):
         f"{{\n"
         f"  \"loai_bds\": \"Chỉ chọn 1: villa, hotel, land, nhà phố\",\n"
         f"  \"vi_tri\": \"Trích xuất khu vực (vd: Thạch Sơn, Sa Pa)\",\n"
-        f"  \"tieu_de_moi\": \"Viết 1 tiêu đề giật tít, đầy đủ thông tin, DÀI TỪ 60 - 100 KÝ TỰ (Vd: Bán Nhà Mặt Phố Thạch Sơn, Sa Pa - 350m2, Đang Kinh Doanh Đỉnh). KHÔNG ĐƯỢC VIẾT CỤT NGỦN.\",\n"
+        f"  \"tieu_de_moi\": \"Viết 1 tiêu đề giật tít, đầy đủ thông tin, DÀI TỪ 60 - 100 KÝ TỰ. KHÔNG ĐƯỢC VIẾT CỤT NGỦN.\",\n"
         f"  \"meta_desc\": \"Mô tả SEO hấp dẫn khoảng 150 ký tự, tóm tắt điểm ăn tiền nhất.\",\n"
         f"  \"nhan_fomo\": \"Nhãn tối đa 5 từ (vd: Dòng Tiền Khủng, Lô Góc Siêu Hiếm, Kinh Doanh Sầm Uất...).\",\n"
-        f"  \"html_clean\": \"Viết bài PR cực kỳ CHI TIẾT, DÀI DẶN, văn phong đẳng cấp, lôi cuốn người mua. BẮT BUỘC giữ lại toàn bộ giá trị, thông số, ưu điểm từ bản gốc. Trình bày đẹp mắt bằng HTML. BẮT BUỘC dùng các thẻ <h3> để chia đoạn rõ ràng (Ví dụ: <h3>🌟 Vị Trí Đắc Địa</h3>, <h3>💎 Thiết Kế & Thông Số</h3>, <h3>🚀 Tiềm Năng Đầu Tư</h3>). Dùng thẻ <ul>, <li> để liệt kê các tiện ích, điểm nổi bật. XÓA SẠCH SĐT và tên môi giới cũ.\"\n"
+        f"  \"html_clean\": \"Viết bài PR cực kỳ CHI TIẾT, DÀI DẶN, văn phong đẳng cấp, lôi cuốn người mua. BẮT BUỘC giữ lại toàn bộ giá trị, thông số, ưu điểm từ bản gốc. Trình bày đẹp mắt bằng HTML. BẮT BUỘC dùng các thẻ <h3> để chia đoạn rõ ràng. Dùng thẻ <ul>, <li> để liệt kê các tiện ích, điểm nổi bật. XÓA SẠCH SĐT và tên môi giới cũ.\"\n"
         f"}}\n\n"
         f"--- Tiêu đề gốc: {tieu_de}\n"
         f"--- Mô tả gốc: {ngu_canh_tho}"
     )
     
-    # Băng đạn AI (Đã cập nhật mã API ID chuẩn xác nhất từ Docs)
-    danh_sach_models = [
-        "openai/gpt-oss-120b",
-        "llama-3.3-70b-versatile",
-        "openai/gpt-oss-20b"
-    ]
+    danh_sach_models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"]
 
+    # Vòng lặp quét qua từng Model
     for model_name in danh_sach_models:
-        print(f"  👉 Đang nhờ AI [{model_name}] vắt óc viết bài...")
-        payload = {
-            "model": model_name,
-            "messages": [{"role": "user", "content": prompt}],
-            "response_format": { "type": "json_object" },
-            "temperature": 0.3 
-        }
+        so_key_da_thu = 0
         
-        try:
-            res = requests.post(url, headers=headers, json=payload, timeout=35)
-            res_json = res.json()
+        # Vòng lặp quét qua từng Key cho Model hiện tại
+        while so_key_da_thu < len(DANH_SACH_GROQ_KEYS):
+            key = DANH_SACH_GROQ_KEYS[vi_tri_groq_key]
+            print(f"  👉 Đang nhờ AI [{model_name}] (dùng Key số {vi_tri_groq_key + 1}) vắt óc viết bài...")
             
-            if 'choices' in res_json:
-                ai_res = json.loads(res_json['choices'][0]['message']['content'])
-                print(f"  ✅ AI [{model_name}] đã sáng tác xong siêu phẩm!")
-                return ai_res
-            else:
-                error_msg = res_json.get('error', {}).get('message', 'Lỗi không xác định')
-                print(f"  ⚠️ [{model_name}] gặp sự cố/hết hạn ngạch: {error_msg}")
-                print("  🔄 Tự động rút súng dự phòng, chuyển sang Model tiếp theo...")
-                continue # Nhảy sang model tiếp theo trong danh sách
+            url = "https://api.groq.com/openai/v1/chat/completions"
+            headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+            payload = {
+                "model": model_name,
+                "messages": [{"role": "user", "content": prompt}],
+                "response_format": { "type": "json_object" },
+                "temperature": 0.3 
+            }
+            
+            try:
+                res = requests.post(url, headers=headers, json=payload, timeout=35)
                 
-        except Exception as e:
-            print(f"  ⚠️ Lỗi kết nối mạng với [{model_name}]: {str(e)}")
-            continue 
+                if res.status_code == 200:
+                    res_json = res.json()
+                    ai_res = json.loads(res_json['choices'][0]['message']['content'])
+                    print(f"  ✅ AI [{model_name}] đã sáng tác xong siêu phẩm!")
+                    return ai_res
+                else:
+                    res_json = res.json()
+                    error_msg = res_json.get('error', {}).get('message', str(res.status_code))
+                    print(f"  ⚠️ Lỗi Key {vi_tri_groq_key + 1}: {error_msg}")
+                    # Đổi sang Key tiếp theo
+                    vi_tri_groq_key = (vi_tri_groq_key + 1) % len(DANH_SACH_GROQ_KEYS)
+                    so_key_da_thu += 1
+                    time.sleep(1) # Nghỉ 1 nhịp trước khi thử Key mới
+                    
+            except Exception as e:
+                print(f"  ⚠️ Lỗi mạng với Key {vi_tri_groq_key + 1}: {str(e)}")
+                vi_tri_groq_key = (vi_tri_groq_key + 1) % len(DANH_SACH_GROQ_KEYS)
+                so_key_da_thu += 1
+                time.sleep(1)
 
-    # Nếu xui xẻo cả 3 con đều sập hoặc hết Token
-    print("⏳ Cả 3 AI khủng đều đã cạn kiệt. Bắt buộc ép Bot đi ngủ 60s để hồi máu...")
+    print("⏳ Oảng rồi! Toàn bộ Model và Key đều sập. Nghỉ ngơi 60s...")
     time.sleep(60)
     return None
 
@@ -126,11 +142,15 @@ def process_image(url_goc, slug):
 # ================= 4. QUY TRÌNH QUÉT CHÍNH (ĐA TRANG) =================
 def run_bot():
     base_url = "https://batdongsan.com.vn/nha-dat-ban-sa-pa-lca"
-    print("🚀 BẮT ĐẦU CHẾ ĐỘ CÀO DIỆN RỘNG (AUTO-SWITCH 3 MODEL KHỦNG)")
+    print("🚀 BẮT ĐẦU CHẾ ĐỘ CÀO BĐS (AUTO-SWITCH KEYS & MODELS)")
     
     da_xu_ly = 0
     trang_bat_dau = 1
     trang_ket_thuc = 5 
+    
+    # Bấm giờ để tự ngắt
+    thoi_gian_bat_dau = time.time()
+    gioi_han_thoi_gian = 2 * 3600 # 2 tiếng
 
     for page in range(trang_bat_dau, trang_ket_thuc + 1):
         url_hien_tai = base_url if page == 1 else f"{base_url}/p{page}"
@@ -150,6 +170,11 @@ def run_bot():
             print(f"📋 Tìm thấy {len(cards)} tin trên trang {page}.")
 
             for card in cards:
+                # Kiểm tra rơ-le thời gian
+                if time.time() - thoi_gian_bat_dau > gioi_han_thoi_gian:
+                    print("\n⏱️ ĐÃ CHẠY ĐỦ 2 TIẾNG! BOT TỰ ĐỘNG NGHỈ NGƠI.")
+                    return
+
                 link_tag = card.select_one('a.js__product-link-for-product-id')
                 if not link_tag: continue
                 detail_url = "https://batdongsan.com.vn" + link_tag['href']
@@ -252,7 +277,7 @@ def run_bot():
         except Exception as e:
             print(f"❌ Lỗi khi quét trang {page}: {e}")
 
-    print(f"\n🎉 KẾT THÚC CÀO DIỆN RỘNG. Tổng số tin đã lưu: {da_xu_ly}")
+    print(f"\n🎉 KẾT THÚC CÀO BĐS. Tổng số tin đã lưu: {da_xu_ly}")
 
 if __name__ == "__main__":
     run_bot()
