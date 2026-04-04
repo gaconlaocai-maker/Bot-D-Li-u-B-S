@@ -58,7 +58,7 @@ def request_thong_minh(url, params):
         try:
             res = requests.get(url, headers=headers, params=params)
             
-            # 1. Báo lỗi hết hạn ngạch (429) hoặc vượt quá limit (403 + exceeded)
+            # Báo lỗi hết hạn ngạch (429) hoặc vượt quá limit (403 + exceeded)
             if res.status_code == 429 or (res.status_code == 403 and "exceeded" in res.text.lower()):
                 print(f"⚠️ API Key số {vi_tri_key_hien_tai + 1} đã CẠN KIỆT!")
                 vi_tri_key_hien_tai += 1
@@ -70,7 +70,7 @@ def request_thong_minh(url, params):
                 print(f"🔄 TỰ ĐỘNG THAY ĐẠN: Chuyển sang API Key số {vi_tri_key_hien_tai + 1}...")
                 continue 
             
-            # 2. Báo lỗi do CHƯA SUBSCRIBE gói Free trên RapidAPI
+            # Báo lỗi do CHƯA SUBSCRIBE gói Free trên RapidAPI
             if res.status_code == 403 and "subscribe" in res.text.lower():
                 print(f"❌ LỖI NGHIÊM TRỌNG: API Key số {vi_tri_key_hien_tai + 1} CHƯA ĐƯỢC BẤM SUBSCRIBE GÓI FREE TRÊN RAPIDAPI!")
                 vi_tri_key_hien_tai += 1
@@ -82,7 +82,7 @@ def request_thong_minh(url, params):
                 print(f"🔄 TỰ ĐỘNG THAY ĐẠN: Chuyển sang API Key số {vi_tri_key_hien_tai + 1}...")
                 continue
 
-            # 3. Lỗi lạ từ server Booking
+            # Lỗi lạ từ server Booking
             if res.status_code != 200:
                 print(f"⚠️ LỖI MẠNG BOOKING (Mã {res.status_code}): {res.text}")
                 return None
@@ -129,7 +129,7 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
         url_search = "https://booking-com.p.rapidapi.com/v1/hotels/search"
         querystring = {
             "dest_id": dest_id, 
-            "dest_type": dest_type, # <--- ĐÃ FIX LỖI TẠI ĐÂY NHA SẾP!
+            "dest_type": dest_type,
             "checkin_date": ngay_in, 
             "checkout_date": ngay_out,
             "adults_number": "2", 
@@ -142,11 +142,10 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
         }
 
         res_search = request_thong_minh(url_search, params=querystring)
-        if not res_search: break # Nếu hết sạch API Key thì thoát
+        if not res_search: break 
         
         hotels = res_search.get('result', [])
 
-        # Nếu trang này không còn khách sạn nào -> Bắt bệnh và Thoát
         if not hotels:
             print(f"⚠️ CẢNH BÁO: API không trả về danh sách khách sạn! Dữ liệu nhận được: {res_search}")
             print(f"🏁 Đã vét cạn kiệt cơ sở lưu trú tại {dia_diem}!")
@@ -166,7 +165,6 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
 
             print(f"\n🏠 Đang xử lý ({tong_da_lay + 1}): {ten_phong}")
 
-            # Chống trùng lặp
             try:
                 check = supabase.table("phong_nghi").select("id").eq("tieu_de", ten_phong).execute()
                 if len(check.data) > 0:
@@ -190,9 +188,17 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
                 res_desc = request_thong_minh(url_desc, params={"hotel_id": hotel_id, "locale": "vi"})
                 mo_ta = res_desc.get('description', f'Kỳ nghỉ dưỡng tuyệt vời tại {ten_phong}.') if isinstance(res_desc, dict) else ""
 
-                # ---> MOI LOẠI PHÒNG
+                # ---> MOI LOẠI PHÒNG (ĐÃ FIX LỖI THAM SỐ TẠI ĐÂY NHA SẾP)
                 url_rooms = "https://booking-com.p.rapidapi.com/v1/hotels/room-list"
-                params_room = {"hotel_id": hotel_id, "checkin_date": ngay_in, "checkout_date": ngay_out, "currency": "VND", "locale": "vi", "adults_number_array": "2"}
+                params_room = {
+                    "hotel_id": hotel_id, 
+                    "checkin_date": ngay_in, 
+                    "checkout_date": ngay_out, 
+                    "currency": "VND", 
+                    "locale": "vi", 
+                    "units": "metric",                 # Tham số mới bắt buộc thêm
+                    "adults_number_by_rooms": "2"      # Tham số đã được đổi tên theo chuẩn mới
+                }
                 res_rooms = request_thong_minh(url_rooms, params=params_room)
 
                 tap_hop_ten_phong, tap_hop_giuong = set(), set()
@@ -228,15 +234,12 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
             except Exception as e:
                 print("❌ Lỗi khi bóc tách chi tiết:", e)
 
-            # Check xem đã hết sạch API Key chưa để thoát vòng lặp nhỏ
             if vi_tri_key_hien_tai >= len(DANH_SACH_KEYS): break
             time.sleep(1.5)
 
-        # Check xem đã hết sạch API Key chưa để thoát vòng lặp lật trang
         if vi_tri_key_hien_tai >= len(DANH_SACH_KEYS): break
         page_number += 1
         time.sleep(2)
 
 if __name__ == "__main__":
-    # Chiến full Sa Pa trước, giới hạn số lượng đặt cực lớn để vét cạn!
     cao_truc_tiep_booking("Sa Pa", max_hotels=9999)
