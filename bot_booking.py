@@ -12,7 +12,6 @@ if not RAPIDAPI_KEYS_STR:
     print("❌ LỖI: Chưa có RAPIDAPI_KEY. Sếp nhớ nạp đạn vào Github Secrets nhé!")
     exit()
 
-# Tách chuỗi thành danh sách các Key (bỏ khoảng trắng thừa nếu có)
 DANH_SACH_KEYS = [k.strip() for k in RAPIDAPI_KEYS_STR.split(",") if k.strip()]
 vi_tri_key_hien_tai = 0
 
@@ -45,7 +44,7 @@ def upload_len_cloud(image_url):
     except:
         return image_url
 
-# ================= CƠ CHẾ THAY ĐẠN TỰ ĐỘNG ĐÃ NÂNG CẤP =================
+# ================= CƠ CHẾ THAY ĐẠN TỰ ĐỘNG =================
 def request_thong_minh(url, params):
     global vi_tri_key_hien_tai
     
@@ -58,48 +57,31 @@ def request_thong_minh(url, params):
         try:
             res = requests.get(url, headers=headers, params=params)
             
-            # Báo lỗi hết hạn ngạch (429) hoặc vượt quá limit (403 + exceeded)
             if res.status_code == 429 or (res.status_code == 403 and "exceeded" in res.text.lower()):
                 print(f"⚠️ API Key số {vi_tri_key_hien_tai + 1} đã CẠN KIỆT!")
                 vi_tri_key_hien_tai += 1
-                
-                if vi_tri_key_hien_tai >= len(DANH_SACH_KEYS):
-                    print("❌ TOÀN BỘ API KEYS ĐÃ HẾT ĐẠN. Dừng chiến dịch!")
-                    return None
-                
-                print(f"🔄 TỰ ĐỘNG THAY ĐẠN: Chuyển sang API Key số {vi_tri_key_hien_tai + 1}...")
+                if vi_tri_key_hien_tai >= len(DANH_SACH_KEYS): return None
+                print(f"🔄 Đang chuyển sang API Key số {vi_tri_key_hien_tai + 1}...")
                 continue 
             
-            # Báo lỗi do CHƯA SUBSCRIBE gói Free trên RapidAPI
             if res.status_code == 403 and "subscribe" in res.text.lower():
-                print(f"❌ LỖI NGHIÊM TRỌNG: API Key số {vi_tri_key_hien_tai + 1} CHƯA ĐƯỢC BẤM SUBSCRIBE GÓI FREE TRÊN RAPIDAPI!")
+                print(f"❌ LỖI: API Key số {vi_tri_key_hien_tai + 1} CHƯA SUBSCRIBE GÓI FREE!")
                 vi_tri_key_hien_tai += 1
-                
-                if vi_tri_key_hien_tai >= len(DANH_SACH_KEYS):
-                    print("❌ TOÀN BỘ API KEYS ĐỀU LỖI HOẶC HẾT ĐẠN!")
-                    return None
-                    
-                print(f"🔄 TỰ ĐỘNG THAY ĐẠN: Chuyển sang API Key số {vi_tri_key_hien_tai + 1}...")
+                if vi_tri_key_hien_tai >= len(DANH_SACH_KEYS): return None
                 continue
 
-            # Lỗi lạ từ server Booking
             if res.status_code != 200:
-                print(f"⚠️ LỖI MẠNG BOOKING (Mã {res.status_code}): {res.text}")
                 return None
             
             return res.json()
-            
         except Exception as e:
-            print("❌ Lỗi mạng hoặc kết nối:", e)
             return None
 
-# ================= 2. QUY TRÌNH MÁY XÚC CÀO SẠCH =================
+# ================= 2. QUY TRÌNH MÁY XÚC FULL TÍNH NĂNG =================
 def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
-    print(f"\n🚀 KHỞI ĐỘNG MÁY XÚC VÀO THỊ TRƯỜNG: {dia_diem.upper()}")
-    print(f"🔫 Đã nạp {len(DANH_SACH_KEYS)} băng đạn API!")
+    print(f"\n🚀 KHỞI ĐỘNG MÁY XÚC: {dia_diem.upper()} (FULL PHÒNG & TIỆN ÍCH)")
     print("="*60)
 
-    # 1. Lấy mã định danh khu vực
     url_loc = "https://booking-com.p.rapidapi.com/v1/hotels/locations"
     res_loc = request_thong_minh(url_loc, params={"name": dia_diem, "locale": "vi"})
     if not res_loc: return
@@ -112,9 +94,7 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
                 dest_type = item.get('dest_type')
                 break
 
-    if not dest_id:
-        print(f"❌ Không tìm thấy mã khu vực cho {dia_diem}")
-        return
+    if not dest_id: return
 
     ngay_in = (datetime.datetime.now() + datetime.timedelta(days=7)).strftime("%Y-%m-%d")
     ngay_out = (datetime.datetime.now() + datetime.timedelta(days=8)).strftime("%Y-%m-%d")
@@ -122,36 +102,24 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
     tong_da_lay = 0
     page_number = 0
 
-    # 2. Vòng lặp Lật trang (Pagination)
     while tong_da_lay < max_hotels:
-        print(f"\n📄 Đang quét trang số {page_number + 1} của {dia_diem}...")
+        print(f"\n📄 Đang quét trang số {page_number + 1}...")
         
         url_search = "https://booking-com.p.rapidapi.com/v1/hotels/search"
         querystring = {
-            "dest_id": dest_id, 
-            "dest_type": dest_type,
-            "checkin_date": ngay_in, 
-            "checkout_date": ngay_out,
-            "adults_number": "2", 
-            "room_number": "1",
-            "locale": "vi", 
-            "units": "metric",
-            "order_by": "popularity", 
-            "filter_by_currency": "VND", 
-            "page_number": str(page_number) 
+            "dest_id": dest_id, "dest_type": dest_type,
+            "checkin_date": ngay_in, "checkout_date": ngay_out,
+            "adults_number": "2", "room_number": "1",
+            "locale": "vi", "units": "metric",
+            "order_by": "popularity", "filter_by_currency": "VND", "page_number": str(page_number) 
         }
 
         res_search = request_thong_minh(url_search, params=querystring)
         if not res_search: break 
         
         hotels = res_search.get('result', [])
+        if not hotels: break
 
-        if not hotels:
-            print(f"⚠️ CẢNH BÁO: API không trả về danh sách khách sạn! Dữ liệu nhận được: {res_search}")
-            print(f"🏁 Đã vét cạn kiệt cơ sở lưu trú tại {dia_diem}!")
-            break
-
-        # 3. Cào chi tiết từng Khách sạn trong trang
         for hotel in hotels:
             if tong_da_lay >= max_hotels: break
 
@@ -161,9 +129,13 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
             gia_tien = hotel.get('min_total_price', 0)
             gia_text = f"{int(gia_tien):,} đ/đêm" if gia_tien > 0 else "Liên hệ"
             loai_bds = hotel.get('accommodation_type_name', 'Khách sạn')
-            link_goc = hotel.get('url', '')
+            
+            # --- LẤY TỌA ĐỘ CHUẨN ĐỂ TẠO LINK GOOGLE MAPS ---
+            lat = hotel.get('latitude')
+            lng = hotel.get('longitude')
+            link_map = f"https://www.google.com/maps?q={lat},{lng}" if lat and lng else hotel.get('url', '')
 
-            print(f"\n🏠 Đang xử lý ({tong_da_lay + 1}): {ten_phong}")
+            print(f"\n🏠 Đang xử lý: {ten_phong}")
 
             try:
                 check = supabase.table("phong_nghi").select("id").eq("tieu_de", ten_phong).execute()
@@ -173,31 +145,35 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
             except: pass
 
             try:
-                # ---> MOI ẢNH
+                # ---> MOI ẢNH (Lấy 30 ảnh HD)
                 url_photos = "https://booking-com.p.rapidapi.com/v1/hotels/photos"
                 res_photos = request_thong_minh(url_photos, params={"hotel_id": hotel_id, "locale": "vi"})
                 hinh_anh_moi = []
                 if isinstance(res_photos, list):
-                    print("   ☁️ Đang bơm ảnh lên Cloudinary...")
-                    for photo in res_photos[:7]: 
+                    for photo in res_photos[:30]: 
                         url_anh = photo.get('url_max') or photo.get('url_square60', '')
                         if url_anh: hinh_anh_moi.append(upload_len_cloud(url_anh.replace('square60', 'max1280x900')))
 
                 # ---> MOI MÔ TẢ
                 url_desc = "https://booking-com.p.rapidapi.com/v1/hotels/description"
                 res_desc = request_thong_minh(url_desc, params={"hotel_id": hotel_id, "locale": "vi"})
-                mo_ta = res_desc.get('description', f'Kỳ nghỉ dưỡng tuyệt vời tại {ten_phong}.') if isinstance(res_desc, dict) else ""
+                mo_ta = res_desc.get('description', f'Kỳ nghỉ tuyệt vời tại {ten_phong}.') if isinstance(res_desc, dict) else ""
 
-                # ---> MOI LOẠI PHÒNG (ĐÃ FIX LỖI THAM SỐ TẠI ĐÂY NHA SẾP)
+                # ---> MOI TIỆN ÍCH (AMENITIES)
+                url_facilities = "https://booking-com.p.rapidapi.com/v1/hotels/facilities"
+                res_fac = request_thong_minh(url_facilities, params={"hotel_id": hotel_id, "locale": "vi"})
+                tap_hop_tien_ich = set()
+                if isinstance(res_fac, list):
+                    for f in res_fac:
+                        name = f.get('facility_name') or f.get('name')
+                        if name: tap_hop_tien_ich.add(name)
+                chuoi_tien_ich = ", ".join(list(tap_hop_tien_ich)) if tap_hop_tien_ich else "Wifi miễn phí, Chỗ để xe, Lễ tân 24h"
+
+                # ---> MOI LOẠI PHÒNG (KHÔNG GIỚI HẠN CHỮ NỮA)
                 url_rooms = "https://booking-com.p.rapidapi.com/v1/hotels/room-list"
                 params_room = {
-                    "hotel_id": hotel_id, 
-                    "checkin_date": ngay_in, 
-                    "checkout_date": ngay_out, 
-                    "currency": "VND", 
-                    "locale": "vi", 
-                    "units": "metric",                 # Tham số mới bắt buộc thêm
-                    "adults_number_by_rooms": "2"      # Tham số đã được đổi tên theo chuẩn mới
+                    "hotel_id": hotel_id, "checkin_date": ngay_in, "checkout_date": ngay_out, 
+                    "currency": "VND", "locale": "vi", "units": "metric", "adults_number_by_rooms": "2"
                 }
                 res_rooms = request_thong_minh(url_rooms, params=params_room)
 
@@ -209,22 +185,25 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
                         if room.get('max_persons', 0) > max_nguoi: max_nguoi = room.get('max_persons')
                         if room.get('bed_configurations'):
                             for bed in room['bed_configurations'][0].get('bed_types', []):
-                                tap_hop_giuong.add(bed.get('name_with_count', 'Giường đôi'))
+                                tap_hop_giuong.add(bed.get('name_with_count', 'Giường'))
 
-                chuoi_loai_phong = ", ".join(list(tap_hop_ten_phong))[:200] if tap_hop_ten_phong else "Đa dạng các hạng phòng"
+                # Ghép toàn bộ tên phòng, không cắt xén
+                chuoi_loai_phong = ", ".join(list(tap_hop_ten_phong)) if tap_hop_ten_phong else "Đa dạng các hạng phòng"
                 chuoi_suc_chua = f"Từ 1 đến {max_nguoi} người/phòng"
-                chuoi_loai_giuong = ", ".join(list(tap_hop_giuong))[:150] if tap_hop_giuong else "Giường đơn, Giường đôi tiêu chuẩn"
+                chuoi_loai_giuong = ", ".join(list(tap_hop_giuong)) if tap_hop_giuong else "Giường đơn, Giường đôi"
 
                 # ---> ĐÓNG GÓI INSERT
                 slug = tao_slug(ten_phong)[:50] + "-" + str(int(time.time()))
                 data_insert = {
                     "tieu_de": ten_phong, "slug": slug, "vi_tri": vi_tri, "loai_bds": loai_bds,
-                    "gia": gia_text, "hinh_anh": hinh_anh_moi if hinh_anh_moi else ["https://images.unsplash.com/photo-1522708323590-d24dbb6b0267"],
+                    "gia": gia_text, "hinh_anh": hinh_anh_moi if hinh_anh_moi else [],
                     "mo_ta": mo_ta, "nhan_fomo": random.choice(DANH_SACH_FOMO),
-                    "meta_title": f"Đặt phòng {ten_phong} - Giá Rẻ Nhất",
+                    "meta_title": f"Đặt phòng {ten_phong} - Giá Tốt Nhất",
                     "meta_desc": (f"Trải nghiệm {ten_phong} tại {vi_tri}. " + mo_ta)[:155] + "...",
                     "loai_phong": chuoi_loai_phong, "suc_chua": chuoi_suc_chua, "loai_giuong": chuoi_loai_giuong,
-                    "map_url": link_goc, "trang_thai": "Còn phòng", "dien_tich": random.choice([20, 25, 30, 40])
+                    "tien_ich": chuoi_tien_ich,  # Ghi vào cột tiện ích
+                    "map_url": link_map,         # Ghi Link Google Maps chuẩn
+                    "trang_thai": "Còn phòng", "dien_tich": random.choice([20, 25, 30, 40, 50])
                 }
 
                 supabase.table("phong_nghi").insert(data_insert).execute()
