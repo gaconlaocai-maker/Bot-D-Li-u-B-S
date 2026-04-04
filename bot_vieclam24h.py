@@ -128,10 +128,6 @@ def run_bot():
         match_private = re.search(r'privateToken=([^;]+)', CHOTOT_COOKIE)
         if match_private: private_token = match_private.group(1)
 
-    # Đếm giờ để tự ngắt
-    thoi_gian_bat_dau = time.time()
-    gioi_han_thoi_gian = 2 * 3600 # 2 tiếng = 7200 giây
-
     try:
         res = requests.get(api_list, timeout=10)
         ads = res.json().get('ads', [])
@@ -145,11 +141,6 @@ def run_bot():
         }
 
         for ad in ads:
-            # Rơ-le tự ngắt
-            if time.time() - thoi_gian_bat_dau > gioi_han_thoi_gian:
-                print("\n⏱️ ĐÃ CHẠY ĐỦ 2 TIẾNG! BOT TỰ ĐỘNG NGHỈ NGƠI ĐỂ TRÁNH QUÁ TẢI.")
-                return
-
             list_id = ad.get('list_id')
             account_oid = ad.get('account_oid') 
             
