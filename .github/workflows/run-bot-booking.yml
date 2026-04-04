@@ -28,3 +28,4 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
           CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
