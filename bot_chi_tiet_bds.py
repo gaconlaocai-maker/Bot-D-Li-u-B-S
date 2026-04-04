@@ -72,6 +72,7 @@ def ai_analyze_bds(tieu_de, ngu_canh_tho):
         f"--- Mô tả gốc: {ngu_canh_tho}"
     )
     
+    # Băng đạn 3 Model xịn nhất của Groq
     danh_sach_models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"]
 
     # Vòng lặp quét qua từng Model
@@ -115,8 +116,7 @@ def ai_analyze_bds(tieu_de, ngu_canh_tho):
                 so_key_da_thu += 1
                 time.sleep(1)
 
-    print("⏳ Oảng rồi! Toàn bộ Model và Key đều sập. Nghỉ ngơi 60s...")
-    time.sleep(60)
+    print("⏳ Oảng rồi! Toàn bộ Model và Key đều sập. Trả về rỗng để Bot bỏ qua bài này...")
     return None
 
 # ================= 3. XỬ LÝ HÌNH ẢNH =================
@@ -150,7 +150,7 @@ def run_bot():
     
     # Bấm giờ để tự ngắt
     thoi_gian_bat_dau = time.time()
-    gioi_han_thoi_gian = 2 * 3600 # 2 tiếng
+    gioi_han_thoi_gian = 2 * 3600 # 2 tiếng = 7200 giây
 
     for page in range(trang_bat_dau, trang_ket_thuc + 1):
         url_hien_tai = base_url if page == 1 else f"{base_url}/p{page}"
@@ -170,9 +170,9 @@ def run_bot():
             print(f"📋 Tìm thấy {len(cards)} tin trên trang {page}.")
 
             for card in cards:
-                # Kiểm tra rơ-le thời gian
+                # Kiểm tra rơ-le thời gian (tự ngắt nếu quá 2 tiếng)
                 if time.time() - thoi_gian_bat_dau > gioi_han_thoi_gian:
-                    print("\n⏱️ ĐÃ CHẠY ĐỦ 2 TIẾNG! BOT TỰ ĐỘNG NGHỈ NGƠI.")
+                    print("\n⏱️ ĐÃ CHẠY ĐỦ 2 TIẾNG! BOT BĐS TỰ ĐỘNG NGHỈ NGƠI ĐỂ BẢO TOÀN API.")
                     return
 
                 link_tag = card.select_one('a.js__product-link-for-product-id')
@@ -187,7 +187,7 @@ def run_bot():
                     if len(check_dup.data) > 0:
                         print("⏭️ TIN ĐÃ TỒN TẠI. BỎ QUA!")
                         continue
-                except Exception as e:
+                except Exception:
                     pass
 
                 try:
@@ -266,7 +266,7 @@ def run_bot():
                         da_xu_ly += 1
                         print(f"✅ Đã lưu tin thứ {da_xu_ly} (Tiêu đề: {tieu_de_moi[:50]}...)")
                     
-                    time.sleep(10)
+                    time.sleep(5)
 
                 except Exception as e:
                     print(f"❌ Lỗi xử lý tin {tieu_de_goc[:20]}...: {str(e)}")
