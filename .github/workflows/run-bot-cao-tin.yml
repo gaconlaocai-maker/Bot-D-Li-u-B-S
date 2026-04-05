@@ -1,9 +1,5 @@
 name: Bot Cào Tin Tức Mỗi Sáng
 on:
-  push:
-    branches: [main]
-  schedule:
-    - cron: '0 0,4,9,14 * * *'
   workflow_dispatch: {}
 
 jobs:
