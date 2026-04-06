@@ -80,11 +80,8 @@ def ai_analyze_bds(tieu_de, ngu_canh_tho):
         f"--- Mô tả gốc: {ngu_canh_tho}"
     )
     
-    # Vòng lặp quét qua từng Model
     for model_name in DANH_SACH_MODELS_AI:
         so_key_da_thu = 0
-        
-        # Vòng lặp quét qua từng Key cho Model hiện tại
         while so_key_da_thu < len(DANH_SACH_GROQ_KEYS):
             key = DANH_SACH_GROQ_KEYS[vi_tri_groq_key]
             print(f"  👉 Đang nhờ AI [{model_name}] (dùng Key số {vi_tri_groq_key + 1}) vắt óc viết bài...")
@@ -110,10 +107,9 @@ def ai_analyze_bds(tieu_de, ngu_canh_tho):
                     res_json = res.json()
                     error_msg = res_json.get('error', {}).get('message', str(res.status_code))
                     print(f"  ⚠️ Lỗi Key {vi_tri_groq_key + 1}: {error_msg}")
-                    # Đổi sang Key tiếp theo
                     vi_tri_groq_key = (vi_tri_groq_key + 1) % len(DANH_SACH_GROQ_KEYS)
                     so_key_da_thu += 1
-                    time.sleep(1) # Nghỉ 1 nhịp trước khi thử Key mới
+                    time.sleep(1)
                     
             except Exception as e:
                 print(f"  ⚠️ Lỗi mạng với Key {vi_tri_groq_key + 1}: {str(e)}")
@@ -146,17 +142,13 @@ def process_image(url_goc, slug):
 
 # ================= 4. QUY TRÌNH QUÉT CHÍNH (ĐA TRANG) =================
 def run_bot():
-    base_url = "https://batdongsan.com.vn/nha-dat-ban-sa-pa-lca"
-    print("🚀 BẮT ĐẦU CHẾ ĐỘ CÀO BĐS (AUTO-SWITCH KEYS & 4 MODELS KHỦNG)")
+    base_url = "https://batdongsan.com.vn/nha-dat-ban-tinh-lao-cai"
+    print("🚀 BẮT ĐẦU CHẾ ĐỘ CÀO TOÀN BỘ BĐS LÀO CAI (THÁO GIỚI HẠN THỜI GIAN)")
     
     da_xu_ly = 0
     trang_bat_dau = 1
-    trang_ket_thuc = 5 
+    trang_ket_thuc = 100 # Tăng giới hạn lên 100 trang để tự do càn quét
     
-    # Bấm giờ để tự ngắt
-    thoi_gian_bat_dau = time.time()
-    gioi_han_thoi_gian = 2 * 3600 # 2 tiếng = 7200 giây
-
     for page in range(trang_bat_dau, trang_ket_thuc + 1):
         url_hien_tai = base_url if page == 1 else f"{base_url}/p{page}"
         print(f"\n=======================================================")
@@ -170,16 +162,13 @@ def run_bot():
             soup = BeautifulSoup(res.content, 'html.parser')
             cards = soup.select('div.re__card-full-compact, div.js__card')
             
-            if not cards: break
+            if not cards: 
+                print("🛑 HẾT DỮ LIỆU! Đã quét sạch đến trang cuối cùng của web.")
+                break
 
             print(f"📋 Tìm thấy {len(cards)} tin trên trang {page}.")
 
             for card in cards:
-                # Kiểm tra rơ-le thời gian (tự ngắt nếu quá 2 tiếng)
-                if time.time() - thoi_gian_bat_dau > gioi_han_thoi_gian:
-                    print("\n⏱️ ĐÃ CHẠY ĐỦ 2 TIẾNG! BOT BĐS TỰ ĐỘNG NGHỈ NGƠI ĐỂ BẢO TOÀN API.")
-                    return
-
                 link_tag = card.select_one('a.js__product-link-for-product-id')
                 if not link_tag: continue
                 detail_url = "https://batdongsan.com.vn" + link_tag['href']
@@ -190,7 +179,7 @@ def run_bot():
                 try:
                     check_dup = supabase.table("bds_ban").select("id").cs("vi_tri_hien_thi", [detail_url]).execute()
                     if len(check_dup.data) > 0:
-                        print("⏭️ TIN ĐÃ TỒN TẠI. BỎ QUA!")
+                        print("⏭️ TIN ĐÃ TỒN TẠI TRONG KÉT. BỎ QUA TÌM TIN MỚI!")
                         continue
                 except Exception:
                     pass
