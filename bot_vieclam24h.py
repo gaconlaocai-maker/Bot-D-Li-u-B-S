@@ -134,7 +134,7 @@ def run_bot():
         print(f"📋 Tìm thấy {len(ads)} tin.")
 
         headers_chotot = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
             "Cookie": CHOTOT_COOKIE,
             "Authorization": f"Bearer {id_token}" if id_token else "",
             "cgg": "1"
@@ -159,7 +159,6 @@ def run_bot():
             hinh_anh = [ad_dt.get('image')] if ad_dt.get('image') else []
             
             so_dien_thoai = ""
-            
             text_clean = text_tho.replace('.', '').replace(' ', '').replace('-', '')
             phone_match = re.search(r'(0[3|5|7|8|9][0-9]{8})', text_clean)
             
