@@ -16,7 +16,14 @@ if not RAPIDAPI_KEYS_STR or not GROQ_KEYS_STR:
 
 DANH_SACH_RAPID_KEYS = [k.strip() for k in RAPIDAPI_KEYS_STR.split(",") if k.strip()]
 DANH_SACH_GROQ_KEYS = [k.strip() for k in GROQ_KEYS_STR.split(",") if k.strip()]
-DANH_SACH_MODELS_AI = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"]
+
+# Băng đạn 4 Model cực phẩm của Groq
+DANH_SACH_MODELS_AI = [
+    "openai/gpt-oss-120b",     
+    "llama-3.3-70b-versatile", 
+    "openai/gpt-oss-20b",      
+    "llama-3.1-8b-instant"     
+]
 
 vi_tri_rapid_key = 0
 vi_tri_groq_key = 0
@@ -71,14 +78,13 @@ def request_thong_minh(url, params):
         except:
             return None
 
-# ================= CƠ CHẾ AI XÀO NẤU CONTENT "CHÍNH CHỦ" =================
+# ================= CƠ CHẾ AI XÀO NẤU CONTENT (SIÊU CẤP ĐA TÀI KHOẢN) =================
 def xao_nau_content_bang_ai(ten_phong, vi_tri, mo_ta_goc, chuoi_tien_ich, link_goc):
     global vi_tri_groq_key
     
-    # Moi móc mã nguồn Booking
     html_text = ""
     try:
-        req_html = requests.get(link_goc, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}, timeout=5)
+        req_html = requests.get(link_goc, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
         if req_html.status_code == 200:
             clean = re.sub(r'<script.*?</script>', '', req_html.text, flags=re.DOTALL)
             clean = re.sub(r'<style.*?</style>', '', clean, flags=re.DOTALL)
@@ -106,22 +112,23 @@ BẮT BUỘC trả về đúng định dạng có các tag sau (Không giải th
 
     if not DANH_SACH_GROQ_KEYS: return None
     
-    so_key_da_thu = 0
-    while so_key_da_thu < len(DANH_SACH_GROQ_KEYS):
-        key_hien_tai = DANH_SACH_GROQ_KEYS[vi_tri_groq_key]
-        
-        for model in DANH_SACH_MODELS_AI:
+    for model_name in DANH_SACH_MODELS_AI:
+        so_key_da_thu = 0
+        while so_key_da_thu < len(DANH_SACH_GROQ_KEYS):
+            key_hien_tai = DANH_SACH_GROQ_KEYS[vi_tri_groq_key]
+            print(f"   👉 Đang nhờ AI [{model_name}] (dùng Key số {vi_tri_groq_key + 1}) chốt sale...")
+            
             url = "https://api.groq.com/openai/v1/chat/completions"
             headers = {"Authorization": f"Bearer {key_hien_tai}", "Content-Type": "application/json"}
             payload = {
-                "model": model,
+                "model": model_name,
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.3,
                 "max_tokens": 1000
             }
 
             try:
-                res = requests.post(url, headers=headers, json=payload, timeout=20)
+                res = requests.post(url, headers=headers, json=payload, timeout=25)
                 if res.status_code == 200:
                     text_tra_ve = res.json()['choices'][0]['message']['content'].strip()
                     try:
@@ -129,22 +136,23 @@ BẮT BUỘC trả về đúng định dạng có các tag sau (Không giải th
                         meta = re.search(r'\[META\](.*?)\[/META\]', text_tra_ve, re.DOTALL).group(1).strip()
                         desc = re.search(r'\[DESC\](.*?)\[/DESC\]', text_tra_ve, re.DOTALL).group(1).strip()
                         rooms = re.search(r'\[ROOMS\](.*?)\[/ROOMS\]', text_tra_ve, re.DOTALL).group(1).strip()
-                        print(f"   🪄 Groq ({model}) xuất thần bằng Key số {vi_tri_groq_key + 1}!")
+                        print(f"   ✅ AI [{model_name}] đã xuất thần thành công!")
                         return {"title": title, "meta": meta, "desc": desc, "rooms": rooms}
                     except:
-                        continue 
-                elif res.status_code in [429, 401, 403]: 
-                    continue 
-                else:
-                    continue 
-            except Exception:
-                continue
+                        pass # Sai format cũng coi như lỗi, đổi key
                 
-        # Nếu kiệt sức cả 3 model, chuyển sang Key khác
-        print(f"   ❌ Key số {vi_tri_groq_key + 1} kiệt sức. Lôi Key khác ra xài!")
-        vi_tri_groq_key = (vi_tri_groq_key + 1) % len(DANH_SACH_GROQ_KEYS)
-        so_key_da_thu += 1
+                print(f"   ⚠️ Key số {vi_tri_groq_key + 1} nghẽn hoặc lỗi format. Đổi Key...")
+                vi_tri_groq_key = (vi_tri_groq_key + 1) % len(DANH_SACH_GROQ_KEYS)
+                so_key_da_thu += 1
+                time.sleep(1)
+            except Exception as e:
+                print(f"   ⚠️ Lỗi mạng Key {vi_tri_groq_key + 1}: {e}")
+                vi_tri_groq_key = (vi_tri_groq_key + 1) % len(DANH_SACH_GROQ_KEYS)
+                so_key_da_thu += 1
+                time.sleep(1)
                 
+    # Rớt hết các tầng bảo vệ thì trả về mẫu cứng
+    print("⏳ Oảng rồi! Toàn bộ 4 Model và tất cả các Key đều sập. Dùng mô tả mặc định.")
     return {
         "title": f"Đặt phòng {ten_phong} - Ưu Đãi Tại LaoCaiView", 
         "meta": (f"LaoCaiView hân hạnh mang đến trải nghiệm tuyệt vời tại {ten_phong} ở {vi_tri}. " + mo_ta_goc)[:150] + "...", 
@@ -195,7 +203,6 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
             gia_text = f"Chỉ từ {int(gia_tien):,} đ/đêm" if gia_tien > 0 else "Liên hệ để nhận báo giá"
             loai_bds = hotel.get('accommodation_type_name', 'Khách sạn')
             
-            # LINK GOOGLE MAPS CHUẨN
             query_map = urllib.parse.quote(f"{ten_phong} {vi_tri} Việt Nam")
             link_map = f"https://www.google.com/maps/search/?api=1&query={query_map}"
             link_goc = hotel.get('url', '')
@@ -210,7 +217,6 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
             except: pass
 
             try:
-                # 1. MOI ẢNH
                 url_photos = "https://booking-com.p.rapidapi.com/v1/hotels/photos"
                 res_photos = request_thong_minh(url_photos, params={"hotel_id": hotel_id, "locale": "vi"})
                 hinh_anh_moi = []
@@ -220,7 +226,6 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
                         url_anh = photo.get('url_max') or photo.get('url_square60', '')
                         if url_anh: hinh_anh_moi.append(upload_len_cloud(url_anh.replace('square60', 'max1280x900')))
 
-                # 2. MOI MÔ TẢ GỐC & TIỆN ÍCH
                 url_desc = "https://booking-com.p.rapidapi.com/v1/hotels/description"
                 res_desc = request_thong_minh(url_desc, params={"hotel_id": hotel_id, "locale": "vi"})
                 mo_ta_goc = res_desc.get('description', f'Kỳ nghỉ tuyệt vời tại {ten_phong}.') if isinstance(res_desc, dict) else ""
@@ -234,15 +239,12 @@ def cao_truc_tiep_booking(dia_diem, max_hotels=9999):
                         if name: tap_hop_tien_ich.add(name)
                 chuoi_tien_ich = ", ".join(list(tap_hop_tien_ich)) if tap_hop_tien_ich else "Wifi miễn phí, Lễ tân 24h"
 
-                # 3. 🤖 GỌI AI GROQ XÀO NẤU VỚI DỮ LIỆU ĐÃ MỞ RỘNG (15.000 ký tự)
-                print("   🤖 AI Groq đang nhập vai chủ nhà & Soi tên hạng phòng...")
                 ai_data = xao_nau_content_bang_ai(ten_phong, vi_tri, mo_ta_goc, chuoi_tien_ich, link_goc)
                 print(f"   🎯 Hạng phòng gom được: {ai_data['rooms'][:70]}...")
 
                 chuoi_suc_chua = "Tùy hạng phòng (Vui lòng liên hệ)"
                 chuoi_loai_giuong = "Giường đơn/đôi cỡ lớn (Tùy chọn)"
 
-                # 4. ĐÓNG GÓI INSERT
                 slug = tao_slug(ten_phong)[:50] + "-" + str(int(time.time()))
                 data_insert = {
                     "tieu_de": ten_phong, "slug": slug, "vi_tri": vi_tri, "loai_bds": loai_bds,
