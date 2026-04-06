@@ -143,11 +143,15 @@ def process_image(url_goc, slug):
 # ================= 4. QUY TRÌNH QUÉT CHÍNH (ĐA TRANG) =================
 def run_bot():
     base_url = "https://batdongsan.com.vn/nha-dat-ban-tinh-lao-cai"
-    print("🚀 BẮT ĐẦU CHẾ ĐỘ CÀO TOÀN BỘ BĐS LÀO CAI (THÁO GIỚI HẠN THỜI GIAN)")
+    print("🚀 BẮT ĐẦU CHẾ ĐỘ CÀO TOÀN BỘ BĐS LÀO CAI (THÁO GIỚI HẠN THỜI GIAN, CÓ CẢM BIẾN TỰ NGẮT)")
     
     da_xu_ly = 0
     trang_bat_dau = 1
     trang_ket_thuc = 100 # Tăng giới hạn lên 100 trang để tự do càn quét
+
+    # CẢM BIẾN CHỐNG NGÁO TRANG ẢO
+    so_tin_trung_lien_tiep = 0
+    NGUONG_DUNG_BOT = 15 
     
     for page in range(trang_bat_dau, trang_ket_thuc + 1):
         url_hien_tai = base_url if page == 1 else f"{base_url}/p{page}"
@@ -180,9 +184,19 @@ def run_bot():
                     check_dup = supabase.table("bds_ban").select("id").cs("vi_tri_hien_thi", [detail_url]).execute()
                     if len(check_dup.data) > 0:
                         print("⏭️ TIN ĐÃ TỒN TẠI TRONG KÉT. BỎ QUA TÌM TIN MỚI!")
+                        so_tin_trung_lien_tiep += 1
+                        
+                        if so_tin_trung_lien_tiep >= NGUONG_DUNG_BOT:
+                            print(f"\n🚨 CẢM BIẾN KÍCH HOẠT: Đã gặp {so_tin_trung_lien_tiep} tin cũ liên tiếp.")
+                            print("🚨 KẾT LUẬN: Đã cào hết tin mới hoặc web đang xoay vòng trang ảo.")
+                            print("🏁 BOT CHÍNH THỨC RÚT QUÂN ĐI NGỦ! 🏁")
+                            return 
                         continue
                 except Exception:
                     pass
+
+                # Reset cảm biến nếu gặp tin mới
+                so_tin_trung_lien_tiep = 0
 
                 try:
                     res_dt = curl_requests.get(detail_url, impersonate="chrome", timeout=30)
