@@ -416,6 +416,33 @@ def da_ton_tai(field, value):
         return False
 
 
+def slug_prefix_ton_tai(slug_base):
+    if DRY_RUN and not supabase:
+        return False
+    if not supabase or not slug_base:
+        return False
+    try:
+        res = supabase.table("tin_tuc").select("id,slug").ilike("slug", f"{slug_base}%").limit(1).execute()
+        return bool(res.data)
+    except Exception as e:
+        log(f"⚠️ Lỗi kiểm tra trùng slug prefix: {e}")
+        tang_loi()
+        return False
+
+
+def bai_ai_da_ton_tai(audit):
+    suggested_title = (audit.get("suggested_title") or "").strip()
+    slug_base = tao_slug(suggested_title)
+
+    if suggested_title and da_ton_tai("tieu_de", suggested_title):
+        return True, "Tiêu đề AI đã tồn tại trong bảng tin_tuc."
+
+    if slug_base and slug_prefix_ton_tai(slug_base):
+        return True, "Base slug đã tồn tại, có thể là bài trùng đã được thêm timestamp trước đó."
+
+    return False, ""
+
+
 # ================= 4. XU LY ANH WEBP =================
 def fallback_image(topic_type):
     return TOPIC_FALLBACK_IMAGES.get(topic_type, TOPIC_FALLBACK_IMAGES["cam_nang_dia_phuong"])
@@ -676,6 +703,12 @@ def thuc_thi():
             if not should_create or topic_type == "bo_qua" or local_score < 50:
                 THONG_KE["ai_loai"] += 1
                 log("⏭️ AI loại bài vì không đủ liên quan hoặc điểm thấp.")
+                continue
+
+            trung_ai, ly_do_trung_ai = bai_ai_da_ton_tai(audit)
+            if trung_ai:
+                THONG_KE["bo_qua_trung"] += 1
+                log(f"⏭️ Bỏ qua vì trùng bài AI: {ly_do_trung_ai}")
                 continue
 
             html = ai_viet_bai(
