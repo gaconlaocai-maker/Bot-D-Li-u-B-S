@@ -367,7 +367,8 @@ def audit_bds_ban(supabase: Client, columns):
             if url and 'batdongsan.com.vn' in url:
                 try:
                     res = curl_requests.get(url, impersonate="chrome", timeout=10, allow_redirects=False)
-                    if res.status_code in [301, 302, 404] or "Tin này đã ẩn" in res.text or "Không tìm thấy" in res.text:
+                    # Only treat 404 or explicit text as expired (301/302 might be anti-bot redirect blocks)
+                    if res.status_code == 404 or "Tin này đã ẩn" in res.text or "Không tìm thấy" in res.text:
                         issues.append("expired post")
                         if "expired_post" not in report_stats["issues_by_type"]: report_stats["issues_by_type"]["expired_post"] = 0
                         report_stats["issues_by_type"]["expired_post"] += 1
@@ -452,7 +453,8 @@ def audit_viec_lam(supabase: Client, columns):
             if url and 'chotot.com' in url:
                 try:
                     res = curl_requests.get(url, impersonate="chrome", timeout=10, allow_redirects=False)
-                    if res.status_code in [301, 302, 404] or "Tin này đã bị ẩn" in res.text or "Không tìm thấy" in res.text:
+                    # Only treat 404 or explicit text as expired (301/302 might be anti-bot redirect blocks)
+                    if res.status_code == 404 or "Tin này đã bị ẩn" in res.text or "Không tìm thấy" in res.text:
                         issues.append("expired job")
                         if "expired_post" not in report_stats["issues_by_type"]: report_stats["issues_by_type"]["expired_post"] = 0
                         report_stats["issues_by_type"]["expired_post"] += 1
