@@ -313,8 +313,8 @@ def audit_bds_ban(supabase: Client, columns):
                     report_stats["issues_by_type"]["invalid_price_value"] += 1
                     updates['gia_tri_so'] = computed_gia_so
 
-        # 9. Expired post check
-        if 'source_url' in columns:
+        # 9. Expired post check (Skip if already hidden)
+        if 'source_url' in columns and row.get('trang_thai') != 'Ẩn':
             url = row.get('source_url')
             if url and 'batdongsan.com.vn' in url:
                 try:
@@ -379,8 +379,8 @@ def audit_viec_lam(supabase: Client, columns):
             base_slug = create_slug(row.get('tieu_de'))
             updates['slug'] = f"{base_slug}-{row['id']}" if 'id' in row else f"{base_slug}-{int(time.time())}"
 
-        # 3. Expired job check (Chợ Tốt link_goc)
-        if 'link_goc' in columns:
+        # 3. Expired job check (Chợ Tốt link_goc) (Skip if already hidden)
+        if 'link_goc' in columns and row.get('trang_thai') != 'Ẩn':
             url = row.get('link_goc')
             if url and 'chotot.com' in url:
                 try:
@@ -441,16 +441,29 @@ def audit_tin_tuc(supabase: Client, columns):
                 if 'trang_thai' in columns: updates['trang_thai'] = 'Ẩn'
                 if 'needs_review' in columns: updates['needs_review'] = True
             elif USE_AI_AUDIT:
-                ai_result = call_groq_audit(tieu_de, noi_dung)
-                if ai_result:
-                    score = ai_result.get('local_score', 100)
-                    if score < MIN_LOCAL_SCORE:
-                        issues.append(f"AI: Low local score {score}. Reason: {ai_result.get('reason')}")
-                        report_stats["issues_by_type"]["low_relevance_news"] += 1
-                        if 'show_on_home' in columns: updates['show_on_home'] = False
-                        if 'trang_thai' in columns: updates['trang_thai'] = 'Ẩn'
-                        if 'needs_review' in columns: updates['needs_review'] = True
+                # Skip if already audited by AI previously
+                if 'ai_audit' in columns and row.get('ai_audit') is True:
+                    pass
+                else:
+                    ai_result = call_groq_audit(tieu_de, noi_dung)
+                    if ai_result:
+                        score = ai_result.get('local_score', 100)
+                        if 'ai_audit' in columns: updates['ai_audit'] = True
+                        if 'local_score' in columns: updates['local_score'] = score
+                        if 'is_local' in columns: updates['is_local'] = (score >= MIN_LOCAL_SCORE)
+                        if 'suggested_action' in columns: updates['suggested_action'] = ai_result.get('suggested_action')
                         
+                        if score < MIN_LOCAL_SCORE:
+                            issues.append(f"AI: Low local score {score}. Reason: {ai_result.get('reason')}")
+                            report_stats["issues_by_type"]["low_relevance_news"] += 1
+                            if 'show_on_home' in columns: updates['show_on_home'] = False
+                            if 'trang_thai' in columns: updates['trang_thai'] = 'Ẩn'
+                            if 'needs_review' in columns: updates['needs_review'] = True
+                        else:
+                            # Passed AI audit, update status to avoid auditing again
+                            issues.append("AI audited and passed")
+                            # We just want to make sure it triggers an update to save ai_audit = True
+                            
         if 'slug' in columns and not row.get('slug'):
             issues.append("missing slug")
             report_stats["issues_by_type"]["invalid_slug"] += 1
