@@ -19,7 +19,9 @@ DANH_SACH_GROQ_KEYS = [k.strip() for k in GROQ_KEYS_STR.split(",") if k.strip()]
 vi_tri_groq_key = 0
 
 DANH_SACH_MODELS_AI = [
-    "llama-3.3-70b-versatile", 
+    "openai/gpt-oss-120b",
+    "llama-3.3-70b-versatile",
+    "openai/gpt-oss-20b",
     "llama-3.1-8b-instant"
 ]
 
