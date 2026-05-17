@@ -5,3 +5,5 @@ supabase
 cloudinary
 Pillow
 feedparser
+python-dotenv
+unidecode
