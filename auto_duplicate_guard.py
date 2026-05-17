@@ -547,8 +547,8 @@ def patrol_auto_publish_drafts(mode="safe-auto", dry_run=True, limit=None):
         if not dry_run:
             db.table("bds_ban").update({
                 "trang_thai": "Mở bán",
-                "first_published_at": draft.get("first_published_at") or datetime.now(timezone.utc).isoformat(),
-                "duplicate_checked_at": datetime.now(timezone.utc).isoformat()
+                "duplicate_checked_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat()
             }).eq("id", draft["id"]).execute()
 
             db.table("bds_bot_actions").insert(action_log).execute()
@@ -604,8 +604,8 @@ def choose_primary_listing(a, b):
         return (a, b) if dashes_a < dashes_b else (b, a)
 
     # 7. Early index/published date
-    pub_a = a.get("first_published_at") or a.get("created_at") or ""
-    pub_b = b.get("first_published_at") or b.get("created_at") or ""
+    pub_a = a.get("created_at") or ""
+    pub_b = b.get("created_at") or ""
     if pub_a and pub_b:
         return (a, b) if pub_a < pub_b else (b, a)
 
