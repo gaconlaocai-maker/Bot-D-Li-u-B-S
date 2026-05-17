@@ -353,7 +353,7 @@ def audit_bds_ban(supabase: Client, columns):
         if not actual_issues:
             current_status = row.get('trang_thai')
             if 'trang_thai' in columns and current_status in ['Bản nháp', 'Chờ duyệt']:
-                updates['trang_thai'] = 'Hiện'
+                updates['trang_thai'] = 'Mở bán'
             
             if updates:
                 reason = "Auto-publish: No issues found" if not issues else ", ".join(issues) + " (Auto-publish)"
@@ -427,7 +427,7 @@ def audit_viec_lam(supabase: Client, columns):
         if not actual_issues:
             current_status = row.get('trang_thai')
             if 'trang_thai' in columns and current_status in ['Bản nháp', 'Chờ duyệt']:
-                updates['trang_thai'] = 'Hiện'
+                updates['trang_thai'] = 'Đang tuyển'
             
             if updates:
                 reason = "Auto-publish: No issues found" if not issues else ", ".join(issues) + " (Auto-publish)"
@@ -495,7 +495,7 @@ def audit_tin_tuc(supabase: Client, columns):
         if not actual_issues:
             current_status = row.get('trang_thai')
             if 'trang_thai' in columns and current_status in ['Bản nháp', 'Chờ duyệt']:
-                updates['trang_thai'] = 'Hiện'
+                updates['trang_thai'] = 'Đã xuất bản'
             
             if updates:
                 reason = "Auto-publish: No issues found" if not issues else ", ".join(issues) + " (Auto-publish)"
