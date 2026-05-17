@@ -37,6 +37,12 @@ def main():
         type=int,
         help="Action ID to rollback (required if action is rollback)"
     )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=5,
+        help="Maximum number of duplicate pairs or drafts to process"
+    )
 
     args = parser.parse_args()
     dry_run = (args.dry_run == "true")
@@ -73,7 +79,7 @@ def main():
     if args.action in ["patrol-active", "both"]:
         print("--- RUNNING PATROL: HIDE DUPLICATES ---")
         try:
-            hide_results = patrol_active_listings(mode=args.mode, dry_run=dry_run)
+            hide_results = patrol_active_listings(mode=args.mode, dry_run=dry_run, limit=args.limit)
             print(f"-> Patrol hide results: Found and processed {len(hide_results)} duplicate groups.")
         except Exception as e:
             print(f"❌ Error during active patrol: {e}")
@@ -81,7 +87,7 @@ def main():
     if args.action in ["patrol-publish", "both"]:
         print("\n--- RUNNING PATROL: AUTO-PUBLISH ELIGIBLE DRAFTS ---")
         try:
-            publish_results = patrol_auto_publish_drafts(mode=args.mode, dry_run=dry_run)
+            publish_results = patrol_auto_publish_drafts(mode=args.mode, dry_run=dry_run, limit=args.limit)
             print(f"-> Patrol publish results: Approved and published {len(publish_results)} drafts.")
         except Exception as e:
             print(f"❌ Error during publish patrol: {e}")

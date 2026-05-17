@@ -340,13 +340,13 @@ def guard_new_listing(new_data, mode="safe-auto"):
     return new_data, bot_action, dup_review
 
 # --- PHẦN B: BOT TUẦN TRA ĐỊNH KỲ (PATROL ACTIVE LISTINGS) ---
-def patrol_active_listings(mode="safe-auto", dry_run=True):
+def patrol_active_listings(mode="safe-auto", dry_run=True, limit=None):
     """
     Patrol active listings (Mở bán) updated in the last 14 days.
     Identifies duplicate pairs and handles them cleanly with redirects.
     """
     db = get_db_client()
-    print(f"Patrolling active Mở bán listings... Mode: {mode}, Dry-run: {dry_run}")
+    print(f"Patrolling active Mở bán listings... Mode: {mode}, Dry-run: {dry_run}, Limit: {limit}")
     
     # 1. Fetch active listings
     res = db.table("bds_ban").select("*").eq("trang_thai", "Mở bán").execute()
@@ -358,6 +358,9 @@ def patrol_active_listings(mode="safe-auto", dry_run=True):
 
     for i in range(len(active_listings)):
         for j in range(i + 1, len(active_listings)):
+            if limit is not None and len(actions_performed) >= limit:
+                print(f"Reached patrol limit of {limit} actions. Stopping active listing scan.")
+                return actions_performed
             a = active_listings[i]
             b = active_listings[j]
             pair_key = tuple(sorted([a["id"], b["id"]]))
@@ -442,13 +445,13 @@ def patrol_active_listings(mode="safe-auto", dry_run=True):
     return actions_performed
 
 # --- PHẦN C: BOT TUẦN TRA ĐĂNG TIN (PATROL AUTO PUBLISH DRAFTS) ---
-def patrol_auto_publish_drafts(mode="safe-auto", dry_run=True):
+def patrol_auto_publish_drafts(mode="safe-auto", dry_run=True, limit=None):
     """
     Scans listings in 'Bản nháp' or 'Chờ duyệt', validates against the publishing checklist,
     ensures no duplicate score >= 80, and auto-publishes them to 'Mở bán'.
     """
     db = get_db_client()
-    print(f"Patrolling Bản nháp drafts for auto-publish... Mode: {mode}, Dry-run: {dry_run}")
+    print(f"Patrolling Bản nháp drafts for auto-publish... Mode: {mode}, Dry-run: {dry_run}, Limit: {limit}")
     
     # 1. Fetch Drafts
     res_drafts = db.table("bds_ban").select("*").in_("trang_thai", ["Bản nháp", "Chờ duyệt"]).execute()
@@ -464,6 +467,9 @@ def patrol_auto_publish_drafts(mode="safe-auto", dry_run=True):
     forbidden_words = ["siêu phẩm", "cực hot", "vị trí vàng", "cơ hội vàng", "sinh lời", "cam kết", "không rủi ro"]
 
     for draft in drafts:
+        if limit is not None and len(actions_performed) >= limit:
+            print(f"Reached auto-publish limit of {limit} actions. Stopping draft publish scan.")
+            break
         # Publishing Checklist
         issues = []
 
