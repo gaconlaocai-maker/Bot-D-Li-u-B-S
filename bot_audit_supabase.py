@@ -18,6 +18,11 @@ GROQ_KEYS_STR = os.getenv("GROQ_API_KEY", "")
 DANH_SACH_GROQ_KEYS = [k.strip() for k in GROQ_KEYS_STR.split(",") if k.strip()]
 vi_tri_groq_key = 0
 
+DANH_SACH_MODELS_AI = [
+    "llama-3.3-70b-versatile", 
+    "llama-3.1-8b-instant"
+]
+
 DRY_RUN = os.getenv("DRY_RUN", "true").lower() == "true"
 APPLY_FIXES = os.getenv("APPLY_FIXES", "false").lower() == "true"
 MAX_ROWS = int(os.getenv("MAX_ROWS_PER_TABLE", "200"))
@@ -130,45 +135,50 @@ Return ONLY valid JSON (no markdown):
 Title: {title}
 Content snippet: {desc[:500] if desc else ''}
 """
-    payload = {
-        "model": "llama3-8b-8192",
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.1
-    }
-
-    so_key_da_thu = 0
-    while so_key_da_thu < len(DANH_SACH_GROQ_KEYS):
-        key = DANH_SACH_GROQ_KEYS[vi_tri_groq_key]
-        headers = {
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json"
+    for model_name in DANH_SACH_MODELS_AI:
+        payload = {
+            "model": model_name,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.1
         }
-        try:
-            r = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=30)
-            if r.status_code == 429:
-                print(f"⚠️ Groq rate limit (Key {vi_tri_groq_key}). Chuyển key...")
+
+        so_key_da_thu = 0
+        while so_key_da_thu < len(DANH_SACH_GROQ_KEYS):
+            key = DANH_SACH_GROQ_KEYS[vi_tri_groq_key]
+            headers = {
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json"
+            }
+            try:
+                r = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=30)
+                if r.status_code == 429:
+                    print(f"⚠️ Groq rate limit (Key {vi_tri_groq_key}, Model {model_name}). Chuyển key...")
+                    vi_tri_groq_key = (vi_tri_groq_key + 1) % len(DANH_SACH_GROQ_KEYS)
+                    so_key_da_thu += 1
+                    time.sleep(1)
+                    continue
+                    
+                if r.status_code == 400:
+                    print(f"⚠️ Model {model_name} bị từ chối (400 Bad Request). Chuyển model...")
+                    break # Break out of the key loop to try next model
+                    
+                r.raise_for_status()
+                content = r.json()['choices'][0]['message']['content'].strip()
+                if content.startswith("```json"):
+                    content = content[7:]
+                if content.endswith("```"):
+                    content = content[:-3]
+                return json.loads(content)
+            except requests.exceptions.RequestException as e:
+                print(f"⚠️ Groq Lỗi mạng (Key {vi_tri_groq_key}, Model {model_name}): {e}")
                 vi_tri_groq_key = (vi_tri_groq_key + 1) % len(DANH_SACH_GROQ_KEYS)
                 so_key_da_thu += 1
                 time.sleep(1)
-                continue
+            except Exception as e:
+                print(f"Groq parse/other error: {e}")
+                break # Move to next model
                 
-            r.raise_for_status()
-            content = r.json()['choices'][0]['message']['content'].strip()
-            if content.startswith("```json"):
-                content = content[7:]
-            if content.endswith("```"):
-                content = content[:-3]
-            return json.loads(content)
-        except requests.exceptions.RequestException as e:
-            print(f"⚠️ Groq Lỗi mạng (Key {vi_tri_groq_key}): {e}")
-            vi_tri_groq_key = (vi_tri_groq_key + 1) % len(DANH_SACH_GROQ_KEYS)
-            so_key_da_thu += 1
-            time.sleep(1)
-        except Exception as e:
-            print(f"Groq parse/other error: {e}")
-            return None
-            
-    print("❌ Lỗi: Đã thử tất cả các key Groq nhưng đều thất bại!")
+    print("❌ Lỗi: Đã thử tất cả các models và keys nhưng đều thất bại!")
     return None
 
 def apply_update(supabase: Client, table, row_id, updates, reason):
