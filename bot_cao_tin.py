@@ -7,6 +7,7 @@ import time
 import unicodedata
 from datetime import datetime, timezone
 from urllib.parse import urlparse
+import random
 
 import cloudinary
 import cloudinary.uploader
@@ -629,8 +630,11 @@ def thuc_thi():
         f"| MAX={MAX_ARTICLES_PER_RUN} | DRY_RUN={DRY_RUN} | WATERMARK={WATERMARK_IMAGE}"
     )
     so_luong_da_dang = 0
+    # Trộn ngẫu nhiên danh sách nguồn tin để tránh việc luôn quét nguồn đầu tiên
+    nguon_tin_shuffled = list(NGUON_TIN)
+    random.shuffle(nguon_tin_shuffled)
 
-    for nguon in NGUON_TIN:
+    for nguon in nguon_tin_shuffled:
         if so_luong_da_dang >= MAX_ARTICLES_PER_RUN:
             break
 
