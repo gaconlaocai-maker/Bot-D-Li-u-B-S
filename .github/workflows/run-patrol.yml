@@ -1,9 +1,6 @@
 name: Run Auto Duplicate Guard Patrol
 
 on:
-  schedule:
-    # Runs at 18:00 UTC (01:00 VN time) every day
-    - cron: '0 18 * * *'
   workflow_dispatch:
     inputs:
       action:
@@ -30,7 +27,12 @@ on:
         options:
           - 'true'
           - 'false'
-        default: 'false'
+        default: 'true'
+      limit:
+        description: 'Maximum number of items to scan'
+        required: true
+        type: string
+        default: '5'
 
 jobs:
   run-patrol:
@@ -59,13 +61,14 @@ jobs:
         CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
         PATROL_LOG_DIR: ./reports
       run: |
-        # Use inputs if manually triggered, otherwise defaults for schedule
+        # Use inputs if manually triggered, otherwise defaults for safety
         ACTION="${{ github.event.inputs.action || 'both' }}"
         MODE="${{ github.event.inputs.mode || 'safe-auto' }}"
-        DRY_RUN="${{ github.event.inputs.dry_run || 'false' }}"
+        DRY_RUN="${{ github.event.inputs.dry_run || 'true' }}"
+        LIMIT="${{ github.event.inputs.limit || '5' }}"
         
-        echo "Running Patrol with Action: $ACTION, Mode: $MODE, Dry Run: $DRY_RUN"
-        python run_patrol.py --action "$ACTION" --mode "$MODE" --dry-run "$DRY_RUN"
+        echo "Running Patrol with Action: $ACTION, Mode: $MODE, Dry Run: $DRY_RUN, Limit: $LIMIT"
+        python run_patrol.py --action "$ACTION" --mode "$MODE" --dry-run "$DRY_RUN" --limit "$LIMIT"
 
     - name: Upload Patrol Reports
       uses: actions/upload-artifact@v4
