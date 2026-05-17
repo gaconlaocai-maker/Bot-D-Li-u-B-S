@@ -6,6 +6,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from supabase import create_client, Client
 import requests
+from curl_cffi import requests as curl_requests
 from unidecode import unidecode
 
 load_dotenv()
@@ -49,7 +50,8 @@ report_stats = {
         "low_relevance_news": 0,
         "invalid_slug": 0,
         "invalid_area_value": 0,
-        "invalid_price_value": 0
+        "invalid_price_value": 0,
+        "expired_post": 0
     },
     "rows_to_fix": 0,
     "rows_fixed": 0,
@@ -294,8 +296,24 @@ def audit_bds_ban(supabase: Client, columns):
                 # If gia_tri_so is missing or wrong (e.g. 4.5 instead of 4500000000)
                 if gia_so is None or (isinstance(gia_so, (int, float)) and abs(float(gia_so) - computed_gia_so) > 1000):
                     issues.append("invalid price value")
+                    if "invalid_price_value" not in report_stats["issues_by_type"]: report_stats["issues_by_type"]["invalid_price_value"] = 0
                     report_stats["issues_by_type"]["invalid_price_value"] += 1
                     updates['gia_tri_so'] = computed_gia_so
+
+        # 9. Expired post check
+        if 'source_url' in columns:
+            url = row.get('source_url')
+            if url and 'batdongsan.com.vn' in url:
+                try:
+                    res = curl_requests.get(url, impersonate="chrome", timeout=10, allow_redirects=False)
+                    if res.status_code in [301, 302, 404] or "Tin này đã ẩn" in res.text or "Không tìm thấy" in res.text:
+                        issues.append("expired post")
+                        if "expired_post" not in report_stats["issues_by_type"]: report_stats["issues_by_type"]["expired_post"] = 0
+                        report_stats["issues_by_type"]["expired_post"] += 1
+                        if 'trang_thai' in columns: updates['trang_thai'] = 'Ẩn'
+                        if 'show_on_home' in columns: updates['show_on_home'] = False
+                except:
+                    pass
 
         if issues:
             report_stats["total_issues"] += 1

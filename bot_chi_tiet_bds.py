@@ -63,18 +63,18 @@ def ai_analyze_bds(tieu_de, ngu_canh_tho):
     print(f"🤖 Đang chuẩn bị gửi dữ liệu (Độ dài: {len(ngu_canh_tho)} ký tự) cho AI...")
     
     prompt = (
-        f"Bạn là một Siêu Cò BĐS và Chuyên gia Copywriter tại Lào Cai. Hãy đọc kỹ thông tin bài rao bán dưới đây.\n"
+        f"Bạn là một Siêu Cò BĐS và Chuyên gia SEO Copywriter tại Lào Cai. Hãy đọc kỹ thông tin bài rao bán dưới đây.\n"
         f"Lệnh TUYỆT ĐỐI:\n"
-        f"- KHÔNG ĐƯỢC TÓM TẮT QUÁ NGẮN. KHÔNG ĐƯỢC BỎ SÓT BẤT KỲ CON SỐ NÀO (Giá, Diện tích, Số phòng, Mặt tiền, Tiện ích xung quanh).\n"
-        f"- KHÔNG ĐƯỢC BỊA ĐẶT THÔNG TIN TRÁI VỚI BẢN GỐC.\n\n"
+        f"- Viết bài chuẩn SEO, từ khóa rải tự nhiên. KHÔNG bỏ sót các con số quan trọng (Giá, Diện tích, Số phòng, Mặt tiền, Tiện ích xung quanh).\n"
+        f"- KHÔNG bịa đặt thông tin. KHÔNG để lộ sđt, tên môi giới, hay link của trang gốc.\n\n"
         f"Hãy trả về JSON chính xác với cấu trúc sau:\n"
         f"{{\n"
         f"  \"loai_bds\": \"Chỉ chọn 1: villa, hotel, land, nhà phố\",\n"
         f"  \"vi_tri\": \"Trích xuất khu vực (vd: Thạch Sơn, Sa Pa)\",\n"
-        f"  \"tieu_de_moi\": \"Viết 1 tiêu đề giật tít, đầy đủ thông tin, DÀI TỪ 60 - 100 KÝ TỰ. KHÔNG ĐƯỢC VIẾT CỤT NGỦN.\",\n"
-        f"  \"meta_desc\": \"Mô tả SEO hấp dẫn khoảng 150 ký tự, tóm tắt điểm ăn tiền nhất.\",\n"
-        f"  \"nhan_fomo\": \"Nhãn tối đa 5 từ (vd: Dòng Tiền Khủng, Lô Góc Siêu Hiếm, Kinh Doanh Sầm Uất...).\",\n"
-        f"  \"html_clean\": \"Viết bài PR cực kỳ CHI TIẾT, DÀI DẶN, văn phong đẳng cấp, lôi cuốn người mua. BẮT BUỘC giữ lại toàn bộ giá trị, thông số, ưu điểm từ bản gốc. Trình bày đẹp mắt bằng HTML. BẮT BUỘC dùng các thẻ <h3> để chia đoạn rõ ràng. Dùng thẻ <ul>, <li> để liệt kê các tiện ích, điểm nổi bật. XÓA SẠCH SĐT và tên môi giới cũ.\"\n"
+        f"  \"tieu_de_moi\": \"Viết 1 tiêu đề giật tít, chứa từ khóa SEO, đầy đủ thông tin, DÀI TỪ 60 - 100 KÝ TỰ.\",\n"
+        f"  \"meta_desc\": \"Mô tả SEO hấp dẫn khoảng 150 ký tự, chứa keyword địa danh và loại bđs.\",\n"
+        f"  \"nhan_fomo\": \"Nhãn tối đa 5 từ (vd: Dòng Tiền Khủng, Lô Góc Siêu Hiếm, Cắt Lỗ Sâu...).\",\n"
+        f"  \"html_clean\": \"Viết bài PR cực kỳ CHI TIẾT, DÀI DẶN, văn phong đẳng cấp, lôi cuốn người mua. BẮT BUỘC giữ lại toàn bộ giá trị, thông số, ưu điểm từ bản gốc. Trình bày đẹp mắt bằng HTML. BẮT BUỘC dùng thẻ <h2> và <h3> để chia đoạn chuẩn SEO. Dùng <ul>, <li> để liệt kê tiện ích. Tối ưu từ khóa khu vực Lào Cai / Sa Pa.\"\n"
         f"}}\n\n"
         f"--- Tiêu đề gốc: {tieu_de}\n"
         f"--- Mô tả gốc: {ngu_canh_tho}"
@@ -181,7 +181,8 @@ def run_bot():
                 print(f"\n--- 🔎 ĐANG SOI TIN: {tieu_de_goc[:40]}... ---")
 
                 try:
-                    check_dup = supabase.table("bds_ban").select("id").cs("vi_tri_hien_thi", [detail_url]).execute()
+                    # Check in source_url instead of vi_tri_hien_thi
+                    check_dup = supabase.table("bds_ban").select("id").eq("source_url", detail_url).execute()
                     if len(check_dup.data) > 0:
                         print("⏭️ TIN ĐÃ TỒN TẠI TRONG KÉT. BỎ QUA TÌM TIN MỚI!")
                         so_tin_trung_lien_tiep += 1
@@ -248,11 +249,25 @@ def run_bot():
 
                         price_tag = card.select_one('span.re__card-config-price')
                         area_tag = card.select_one('span.re__card-config-area')
+                        
+                        gia_str = price_tag.get_text(strip=True) if price_tag else "Thỏa thuận"
+                        gia_tri_so = None
+                        if 'tỷ' in gia_str.lower() and 'tỷ/m' not in gia_str.lower():
+                            match = re.search(r'([\d\,\.]+)\s*tỷ', gia_str.lower())
+                            if match:
+                                try: gia_tri_so = int(float(match.group(1).replace(',', '.')) * 1_000_000_000)
+                                except: pass
+                        elif 'triệu' in gia_str.lower() and 'triệu/m' not in gia_str.lower() and 'triệu / m' not in gia_str.lower():
+                            match = re.search(r'([\d\,\.]+)\s*triệu', gia_str.lower())
+                            if match:
+                                try: gia_tri_so = int(float(match.group(1).replace(',', '.')) * 1_000_000)
+                                except: pass
 
                         data_to_save = {
                             "tieu_de": tieu_de_moi, 
                             "slug": slug,
-                            "gia": price_tag.get_text(strip=True) if price_tag else "Thỏa thuận",
+                            "gia": gia_str,
+                            "gia_tri_so": gia_tri_so,
                             "dien_tich": extract_number(area_tag.get_text()) if area_tag else 0,
                             "loai_bds": ai_data.get("loai_bds", "land"),
                             "vi_tri": ai_data.get("vi_tri", "Sa Pa, Lào Cai"), 
@@ -266,7 +281,7 @@ def run_bot():
                             "meta_title": tieu_de_moi, 
                             "meta_desc": ai_data.get("meta_desc", ""), 
                             "nhan_fomo": ai_data.get("nhan_fomo", ""), 
-                            "vi_tri_hien_thi": [detail_url],
+                            "source_url": detail_url,
                             "trang_thai": "Bản nháp"
                         }
 
