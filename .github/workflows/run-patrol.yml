@@ -2,8 +2,8 @@ name: Run Auto Duplicate Guard Patrol
 
 on:
   schedule:
-    # Runs at 18:00 UTC (01:00 VN time) every day
-    - cron: '0 18 * * *'
+    # Cứ mỗi 6 tiếng chạy tự động một lần (vào 7h, 13h, 19h, 1h sáng giờ Việt Nam)
+    - cron: '0 */6 * * *'
   workflow_dispatch:
     inputs:
       action:

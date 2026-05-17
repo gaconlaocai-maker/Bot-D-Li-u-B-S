@@ -236,6 +236,37 @@ def clean_list(val):
         except: return []
     return []
 
+def auto_fix_forbidden_words(title, mo_ta):
+    # Mapping of lowercased forbidden words to high-quality, professional synonyms
+    replacements = {
+        "siêu phẩm": "bất động sản đẹp",
+        "cực hot": "đáng chú ý",
+        "vị trí vàng": "vị trí đắc địa",
+        "cơ hội vàng": "cơ hội tốt",
+        "sinh lời": "tiềm năng phát triển",
+        "cam kết": "bảo đảm",
+        "không rủi ro": "an toàn pháp lý"
+    }
+    
+    fixed_title = title or ""
+    fixed_mo_ta = mo_ta or ""
+    
+    for word, repl in replacements.items():
+        pattern = re.compile(re.escape(word), re.IGNORECASE)
+        
+        def replace_match(match):
+            val = match.group(0)
+            if val.isupper():
+                return repl.upper()
+            if val[0].isupper():
+                return repl[0].upper() + repl[1:]
+            return repl
+            
+        fixed_title = pattern.sub(replace_match, fixed_title)
+        fixed_mo_ta = pattern.sub(replace_match, fixed_mo_ta)
+            
+    return fixed_title, fixed_mo_ta
+
 # --- PHẦN A: GUARD NEW LISTING BEFORE INSERT ---
 def guard_new_listing(new_data, mode="safe-auto"):
     """
@@ -470,6 +501,16 @@ def patrol_auto_publish_drafts(mode="safe-auto", dry_run=True, limit=None):
         if limit is not None and len(actions_performed) >= limit:
             print(f"Reached auto-publish limit of {limit} actions. Stopping draft publish scan.")
             break
+
+        # Proactively auto-fix forbidden advertising words in title and description
+        original_title = draft.get("tieu_de") or ""
+        original_mo_ta = draft.get("mo_ta") or ""
+        fixed_title, fixed_mo_ta = auto_fix_forbidden_words(original_title, original_mo_ta)
+        
+        # Temporarily update the draft dict so checklist and duplicate checks are run on the cleaned text
+        draft["tieu_de"] = fixed_title
+        draft["mo_ta"] = fixed_mo_ta
+
         # Publishing Checklist
         issues = []
 
@@ -528,34 +569,46 @@ def patrol_auto_publish_drafts(mode="safe-auto", dry_run=True, limit=None):
                 break
 
         if issues:
-            print(f"⏭️ Draft ID {draft['id']} ({draft['tieu_de'][:30]}...) fails checklist: {issues}")
+            print(f"⏭️ Draft ID {draft['id']} ({original_title[:30]}...) fails checklist: {issues}")
             continue
 
         # Passes checklist! Auto-publish!
         print(f"🚀 [AUTO-PUBLISH] Draft ID {draft['id']} passes all checks. Auto-publishing...")
         
+        was_fixed = (fixed_title != original_title) or (fixed_mo_ta != original_mo_ta)
+        reason = "Đạt đầy đủ tiêu chuẩn tin đăng và không trùng lặp."
+        if was_fixed:
+            reason = "Tự động làm sạch từ khóa bị cấm và auto-publish thành công."
+            print(f"✨ Auto-fixed forbidden words for ID {draft['id']}:\n  - Title: '{original_title}' -> '{fixed_title}'")
+
         action_log = {
             "action_type": "auto_publish",
             "primary_id": draft["id"],
-            "reason": "Đạt đầy đủ tiêu chuẩn tin đăng và không trùng lặp.",
+            "reason": reason,
             "old_status": draft["trang_thai"],
             "new_status": "Mở bán",
-            "backup_json": draft,
+            "backup_json": {**draft, "original_tieu_de": original_title, "original_mo_ta": original_mo_ta},
             "created_at": datetime.now(timezone.utc).isoformat()
         }
 
         if not dry_run:
-            db.table("bds_ban").update({
+            update_data = {
                 "trang_thai": "Mở bán",
                 "duplicate_checked_at": datetime.now(timezone.utc).isoformat(),
                 "updated_at": datetime.now(timezone.utc).isoformat()
-            }).eq("id", draft["id"]).execute()
+            }
+            if fixed_title != original_title:
+                update_data["tieu_de"] = fixed_title
+            if fixed_mo_ta != original_mo_ta:
+                update_data["mo_ta"] = fixed_mo_ta
+                
+            db.table("bds_ban").update(update_data).eq("id", draft["id"]).execute()
 
             db.table("bds_bot_actions").insert(action_log).execute()
             published_count += 1
             print(f"✅ Successfully auto-published Draft ID {draft['id']}")
         else:
-            print(f"🧪 [DRY-RUN] Would auto-publish Draft ID {draft['id']}")
+            print(f"🧪 [DRY-RUN] Would auto-publish Draft ID {draft['id']} (fixed={was_fixed})")
 
         actions_performed.append(action_log)
 
