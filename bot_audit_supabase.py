@@ -348,7 +348,17 @@ def audit_bds_ban(supabase: Client, columns):
                 except Exception as e:
                     pass
 
-        if issues:
+        # 11. Auto-publish if no issues
+        actual_issues = [iss for iss in issues if "passed" not in iss]
+        if not actual_issues:
+            current_status = row.get('trang_thai')
+            if 'trang_thai' in columns and current_status in ['Bản nháp', 'Chờ duyệt']:
+                updates['trang_thai'] = 'Hiện'
+            
+            if updates:
+                reason = "Auto-publish: No issues found" if not issues else ", ".join(issues) + " (Auto-publish)"
+                apply_update(supabase, table, row['id'], updates, reason)
+        else:
             report_stats["total_issues"] += 1
             if updates:
                 apply_update(supabase, table, row['id'], updates, ", ".join(issues))
@@ -412,7 +422,17 @@ def audit_viec_lam(supabase: Client, columns):
                 except Exception as e:
                     pass
 
-        if issues:
+        # 5. Auto-publish if no issues
+        actual_issues = [iss for iss in issues if "passed" not in iss]
+        if not actual_issues:
+            current_status = row.get('trang_thai')
+            if 'trang_thai' in columns and current_status in ['Bản nháp', 'Chờ duyệt']:
+                updates['trang_thai'] = 'Hiện'
+            
+            if updates:
+                reason = "Auto-publish: No issues found" if not issues else ", ".join(issues) + " (Auto-publish)"
+                apply_update(supabase, table, row['id'], updates, reason)
+        else:
             report_stats["total_issues"] += 1
             if updates:
                 apply_update(supabase, table, row['id'], updates, ", ".join(issues))
@@ -470,7 +490,17 @@ def audit_tin_tuc(supabase: Client, columns):
             base_slug = create_slug(row.get('tieu_de'))
             updates['slug'] = f"{base_slug}-{row['id']}" if 'id' in row else f"{base_slug}-{int(time.time())}"
 
-        if issues:
+        # 5. Auto-publish if no issues
+        actual_issues = [iss for iss in issues if "passed" not in iss]
+        if not actual_issues:
+            current_status = row.get('trang_thai')
+            if 'trang_thai' in columns and current_status in ['Bản nháp', 'Chờ duyệt']:
+                updates['trang_thai'] = 'Hiện'
+            
+            if updates:
+                reason = "Auto-publish: No issues found" if not issues else ", ".join(issues) + " (Auto-publish)"
+                apply_update(supabase, table, row['id'], updates, reason)
+        else:
             report_stats["total_issues"] += 1
             if updates:
                 apply_update(supabase, table, row['id'], updates, ", ".join(issues))
