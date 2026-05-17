@@ -1,4 +1,5 @@
 import os, sys, re, time, requests, io, json, cloudinary, cloudinary.uploader
+from slug_helper import generate_property_slug
 from curl_cffi import requests as curl_requests
 from bs4 import BeautifulSoup
 from supabase import create_client
@@ -36,34 +37,12 @@ supabase = create_client(os.environ.get("SUPABASE_URL"), os.environ.get("SUPABAS
 cloudinary.config(cloudinary_url=os.environ.get("CLOUDINARY_URL"))
 
 def extract_number(text):
-    if not text:
-        return 0
-    text_str = str(text).strip()
-    match = re.search(r'[\d\.,]+', text_str)
-    if not match:
-        return 0
-    num_str = match.group()
-    if '.' in num_str or ',' in num_str:
-        parts = re.split(r'[\.,]', num_str)
-        last_part = parts[-1]
-        if len(last_part) == 3:
-            clean_str = num_str.replace('.', '').replace(',', '')
-            try: return int(clean_str)
-            except ValueError: pass
-        elif len(last_part) in [1, 2]:
-            if len(parts) > 2:
-                whole_part = "".join(parts[:-1]).replace('.', '').replace(',', '')
-                clean_str = f"{whole_part}.{last_part}"
-            else:
-                clean_str = f"{parts[0]}.{parts[1]}"
-            try: return int(round(float(clean_str)))
-            except ValueError: pass
-    try:
-        clean_str = num_str.replace(',', '.')
-        return int(round(float(clean_str)))
-    except ValueError:
-        return 0
-
+    if not text: return 0
+    match = re.search(r'\d+([.,]\d+)?', str(text))
+    if match:
+        num_str = match.group().replace(',', '.')
+        return int(float(num_str)) 
+    return 0
 
 def tao_slug(s):
     if not s: return ""
@@ -259,7 +238,7 @@ def run_bot():
                     
                     if ai_data:
                         tieu_de_moi = ai_data.get("tieu_de_moi", tieu_de_goc)
-                        slug = tao_slug(tieu_de_moi)[:50] + "-" + str(int(time.time()))
+                        slug = generate_property_slug(tieu_de_moi, int(time.time()))
                         
                         print("⏳ Đang nén và đưa ảnh lên Cloudinary...")
                         final_images = []
@@ -307,9 +286,36 @@ def run_bot():
                             "trang_thai": "Bản nháp"
                         }
 
-                        supabase.table("bds_ban").insert(data_to_save).execute()
+                        # --- AUTO DUPLICATE GUARD INTEGRATION ---
+                        try:
+                            from auto_duplicate_guard import guard_new_listing
+                            data_to_save, bot_action, dup_review = guard_new_listing(data_to_save, mode="safe-auto")
+                            if data_to_save.get("duplicate_warning") or data_to_save.get("duplicate_review"):
+                                print(f"    ⚠️ [GUARD ALERT] Listing has duplicate warning. Score: {data_to_save.get('duplicate_score')}. Action: {bot_action.get('action_type') if bot_action else 'warning'}")
+                        except Exception as guard_err:
+                            print(f"    ⚠️ Warning running Auto Duplicate Guard: {guard_err}")
+
+                        insert_res = supabase.table("bds_ban").insert(data_to_save).execute()
                         da_xu_ly += 1
                         print(f"✅ Đã lưu tin thứ {da_xu_ly} (Tiêu đề: {tieu_de_moi[:50]}...)")
+
+                        # Log bot action if record is successfully saved
+                        if insert_res.data and len(insert_res.data) > 0:
+                            new_id = insert_res.data[0].get("id")
+                            if new_id and 'bot_action' in locals() and bot_action:
+                                bot_action["duplicate_id"] = new_id
+                                try:
+                                    supabase.table("bds_bot_actions").insert(bot_action).execute()
+                                    print("    📊 Successfully logged guard bot action to database.")
+                                except Exception as log_err:
+                                    print(f"    ⚠️ Warning logging bot action: {log_err}")
+                            if new_id and 'dup_review' in locals() and dup_review:
+                                try:
+                                    dup_review["duplicate_id"] = new_id
+                                    # Try to insert if table exists
+                                    supabase.table("bds_duplicate_reviews").insert(dup_review).execute()
+                                except Exception:
+                                    pass
                     
                     time.sleep(5)
 

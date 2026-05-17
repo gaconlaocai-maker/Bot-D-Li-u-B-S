@@ -8,6 +8,7 @@ from supabase import create_client, Client
 import requests
 from curl_cffi import requests as curl_requests
 from unidecode import unidecode
+from slug_helper import generate_property_slug
 
 load_dotenv()
 
@@ -113,35 +114,6 @@ def create_slug(text):
     text = unidecode(text).lower()
     text = re.sub(r'[^a-z0-9]+', '-', text)
     return text.strip('-')
-
-def extract_number(text):
-    if not text:
-        return 0
-    text_str = str(text).strip()
-    match = re.search(r'[\d\.,]+', text_str)
-    if not match:
-        return 0
-    num_str = match.group()
-    if '.' in num_str or ',' in num_str:
-        parts = re.split(r'[\.,]', num_str)
-        last_part = parts[-1]
-        if len(last_part) == 3:
-            clean_str = num_str.replace('.', '').replace(',', '')
-            try: return int(clean_str)
-            except ValueError: pass
-        elif len(last_part) in [1, 2]:
-            if len(parts) > 2:
-                whole_part = "".join(parts[:-1]).replace('.', '').replace(',', '')
-                clean_str = f"{whole_part}.{last_part}"
-            else:
-                clean_str = f"{parts[0]}.{parts[1]}"
-            try: return int(round(float(clean_str)))
-            except ValueError: pass
-    try:
-        clean_str = num_str.replace(',', '.')
-        return int(round(float(clean_str)))
-    except ValueError:
-        return 0
 
 def check_location(text):
     if not text: return False
@@ -295,11 +267,44 @@ def audit_bds_ban(supabase: Client, columns):
                 if 'needs_review' in columns: updates['needs_review'] = True
 
         # 6. Slug
-        if 'slug' in columns and not row.get('slug'):
-            issues.append("missing slug")
+        slug = row.get('slug') or ""
+        is_broken = False
+        if not slug:
+            is_broken = True
+        else:
+            if "--" in slug or slug.startswith("-") or slug.endswith("-"):
+                is_broken = True
+            elif re.search(r'[^a-z0-9\-]', slug):
+                is_broken = True
+            elif re.search(r'(hot|cuc-hot|sieu-pham|vi-tri-vang|co-hoi-vang|sinh-loi|loi-nhuan|cam-ket|khong-rui-ro)', slug):
+                is_broken = True
+                
+        if is_broken:
+            issues.append("invalid/broken slug")
             report_stats["issues_by_type"]["invalid_slug"] += 1
-            base_slug = create_slug(row.get('tieu_de'))
-            updates['slug'] = f"{base_slug}-{row['id']}" if 'id' in row else f"{base_slug}-{int(time.time())}"
+            
+            new_slug = generate_property_slug(row.get('tieu_de'), row.get('id') or int(time.time()), current_slug=slug)
+            
+            if slug and new_slug != slug:
+                # Listing was public -> create a redirect!
+                if row.get('trang_thai') == 'Mở bán':
+                    redirects_file = "c:/Users/SV STORE/Desktop/LaocaiView/laocaiview-main/src/data/slug-redirects.json"
+                    try:
+                        import os
+                        os.makedirs(os.path.dirname(redirects_file), exist_ok=True)
+                        redirects_map = {}
+                        if os.path.exists(redirects_file):
+                            with open(redirects_file, "r", encoding="utf-8") as f:
+                                redirects_map = json.load(f)
+                        
+                        redirects_map[slug] = new_slug
+                        with open(redirects_file, "w", encoding="utf-8") as f:
+                            json.dump(redirects_map, f, ensure_ascii=False, indent=2)
+                        print(f"🔄 [Redirect 301 Created] '{slug}' -> '{new_slug}'")
+                    except Exception as re_err:
+                        print(f"⚠️ Error creating redirect: {re_err}")
+            
+            updates['slug'] = new_slug
 
         # 7. Area parsing error
         if 'dien_tich' in columns:
@@ -311,10 +316,6 @@ def audit_bds_ban(supabase: Client, columns):
                 if match:
                     issues.append("invalid area value")
                     report_stats["issues_by_type"]["invalid_area_value"] += 1
-                    repaired_area = extract_number(match.group(1))
-                    if repaired_area >= 10:
-                        updates['dien_tich'] = repaired_area
-                        issues.append(f"auto-repaired area to {repaired_area} m²")
                     if 'needs_review' in columns: updates['needs_review'] = True
 
         # 8. Price parsing error
