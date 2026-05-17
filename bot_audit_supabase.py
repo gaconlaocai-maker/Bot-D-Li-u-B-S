@@ -12,7 +12,10 @@ load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+GROQ_KEYS_STR = os.getenv("GROQ_API_KEY", "")
+DANH_SACH_GROQ_KEYS = [k.strip() for k in GROQ_KEYS_STR.split(",") if k.strip()]
+vi_tri_groq_key = 0
 
 DRY_RUN = os.getenv("DRY_RUN", "true").lower() == "true"
 APPLY_FIXES = os.getenv("APPLY_FIXES", "false").lower() == "true"
@@ -107,14 +110,11 @@ def check_location(text):
     return any(loc in text for loc in LAO_CAI_LOCATIONS)
 
 def call_groq_audit(title, desc):
-    if not GROQ_API_KEY:
+    global vi_tri_groq_key
+    if not DANH_SACH_GROQ_KEYS:
         return None
-    try:
-        headers = {
-            "Authorization": f"Bearer {GROQ_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        prompt = f"""You are an auditor for LaoCaiView, a local news/real estate site for Lao Cai and Sa Pa (Vietnam).
+        
+    prompt = f"""You are an auditor for LaoCaiView, a local news/real estate site for Lao Cai and Sa Pa (Vietnam).
 Analyze the following article. Is it relevant to Lao Cai/Sa Pa local news (real estate, tourism, local jobs, local infrastructure)?
 Return ONLY valid JSON (no markdown):
 {{
@@ -128,22 +128,46 @@ Return ONLY valid JSON (no markdown):
 Title: {title}
 Content snippet: {desc[:500] if desc else ''}
 """
-        payload = {
-            "model": "llama3-8b-8192",
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.1
+    payload = {
+        "model": "llama3-8b-8192",
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.1
+    }
+
+    so_key_da_thu = 0
+    while so_key_da_thu < len(DANH_SACH_GROQ_KEYS):
+        key = DANH_SACH_GROQ_KEYS[vi_tri_groq_key]
+        headers = {
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json"
         }
-        r = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload)
-        r.raise_for_status()
-        content = r.json()['choices'][0]['message']['content'].strip()
-        if content.startswith("```json"):
-            content = content[7:]
-        if content.endswith("```"):
-            content = content[:-3]
-        return json.loads(content)
-    except Exception as e:
-        print(f"Groq API error: {e}")
-        return None
+        try:
+            r = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=30)
+            if r.status_code == 429:
+                print(f"⚠️ Groq rate limit (Key {vi_tri_groq_key}). Chuyển key...")
+                vi_tri_groq_key = (vi_tri_groq_key + 1) % len(DANH_SACH_GROQ_KEYS)
+                so_key_da_thu += 1
+                time.sleep(1)
+                continue
+                
+            r.raise_for_status()
+            content = r.json()['choices'][0]['message']['content'].strip()
+            if content.startswith("```json"):
+                content = content[7:]
+            if content.endswith("```"):
+                content = content[:-3]
+            return json.loads(content)
+        except requests.exceptions.RequestException as e:
+            print(f"⚠️ Groq Lỗi mạng (Key {vi_tri_groq_key}): {e}")
+            vi_tri_groq_key = (vi_tri_groq_key + 1) % len(DANH_SACH_GROQ_KEYS)
+            so_key_da_thu += 1
+            time.sleep(1)
+        except Exception as e:
+            print(f"Groq parse/other error: {e}")
+            return None
+            
+    print("❌ Lỗi: Đã thử tất cả các key Groq nhưng đều thất bại!")
+    return None
 
 def apply_update(supabase: Client, table, row_id, updates, reason):
     report_stats["rows_to_fix"] += 1
