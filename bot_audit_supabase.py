@@ -58,7 +58,8 @@ report_stats = {
         "invalid_slug": 0,
         "invalid_area_value": 0,
         "invalid_price_value": 0,
-        "expired_post": 0
+        "expired_post": 0,
+        "orphaned_old_post": 0
     },
     "rows_to_fix": 0,
     "rows_fixed": 0,
@@ -325,6 +326,26 @@ def audit_bds_ban(supabase: Client, columns):
                         if 'trang_thai' in columns: updates['trang_thai'] = 'Ẩn'
                         if 'show_on_home' in columns: updates['show_on_home'] = False
                 except:
+                    pass
+
+        # 10. Orphaned old posts (no source_url and older than 90 days)
+        if 'created_at' in columns:
+            created_at_str = row.get('created_at')
+            url = row.get('source_url') or updates.get('source_url')
+            if not url and created_at_str:
+                try:
+                    # created_at format: "2024-05-17T08:52:50.123+00:00"
+                    # Using timezone-naive subtraction by removing timezone info for simplicity
+                    dt_str = created_at_str.split('+')[0].split('Z')[0].split('.')[0]
+                    dt = datetime.fromisoformat(dt_str)
+                    days_old = (datetime.now() - dt).days
+                    if days_old > 90:
+                        issues.append("orphaned old post")
+                        if "orphaned_old_post" not in report_stats["issues_by_type"]: report_stats["issues_by_type"]["orphaned_old_post"] = 0
+                        report_stats["issues_by_type"]["orphaned_old_post"] += 1
+                        if 'trang_thai' in columns: updates['trang_thai'] = 'Ẩn'
+                        if 'show_on_home' in columns: updates['show_on_home'] = False
+                except Exception as e:
                     pass
 
         if issues:
