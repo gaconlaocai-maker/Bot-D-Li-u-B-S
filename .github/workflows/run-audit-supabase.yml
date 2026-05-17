@@ -9,15 +9,15 @@ on:
       dry_run:
         description: 'Dry Run (Only report, do not change data)'
         required: true
-        default: 'true'
+        default: 'false'
       apply_fixes:
         description: 'Apply Fixes (Will modify database!)'
         required: true
-        default: 'false'
+        default: 'true'
       use_ai:
         description: 'Use AI Audit (Groq)'
         required: false
-        default: 'false'
+        default: 'true'
 
 jobs:
   audit-database:
@@ -43,9 +43,9 @@ jobs:
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-        DRY_RUN: ${{ github.event.inputs.dry_run || 'true' }}
-        APPLY_FIXES: ${{ github.event.inputs.apply_fixes || 'false' }}
-        USE_AI_AUDIT: ${{ github.event.inputs.use_ai || 'false' }}
+        DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        APPLY_FIXES: ${{ github.event.inputs.apply_fixes || 'true' }}
+        USE_AI_AUDIT: ${{ github.event.inputs.use_ai || 'true' }}
         MAX_ROWS_PER_TABLE: 200
       run: |
         python bot_audit_supabase.py
