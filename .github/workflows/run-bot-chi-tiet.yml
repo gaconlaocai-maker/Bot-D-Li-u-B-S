@@ -1,5 +1,8 @@
 name: Chạy Bot Chi Tiết BĐS Sa Pa
 on:
+  schedule:
+    # Runs at 00:00 UTC (07:00 VN time) daily
+    - cron: '0 0 * * *'
   workflow_dispatch: {} # Nhận lệnh chạy thủ công hoặc từ đồng hồ báo thức cron-job.org
 
 jobs:

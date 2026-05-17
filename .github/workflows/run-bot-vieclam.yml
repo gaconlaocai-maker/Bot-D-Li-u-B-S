@@ -1,5 +1,8 @@
 name: Chạy Bot Việc Làm Chợ Tốt
 on:
+  schedule:
+    # Runs at 01:00 UTC (08:00 VN time) daily
+    - cron: '0 1 * * *'
   workflow_dispatch: {} 
 
 jobs:

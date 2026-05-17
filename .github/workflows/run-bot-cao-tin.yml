@@ -1,5 +1,8 @@
 name: Bot Cào Tin Tức Mỗi Sáng
 on:
+  schedule:
+    # Runs at 23:00 UTC (06:00 VN time) daily
+    - cron: '0 23 * * *'
   workflow_dispatch: {}
 
 jobs:
