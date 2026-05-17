@@ -45,7 +45,8 @@ report_stats = {
         "off_region": 0,
         "low_relevance_news": 0,
         "invalid_slug": 0,
-        "invalid_area_value": 0
+        "invalid_area_value": 0,
+        "invalid_price_value": 0
     },
     "rows_to_fix": 0,
     "rows_fixed": 0,
@@ -243,6 +244,34 @@ def audit_bds_ban(supabase: Client, columns):
                     issues.append("invalid area value")
                     report_stats["issues_by_type"]["invalid_area_value"] += 1
                     if 'needs_review' in columns: updates['needs_review'] = True
+
+        # 8. Price parsing error
+        if 'gia' in columns and 'gia_tri_so' in columns:
+            gia_str = str(row.get('gia') or '').lower()
+            gia_so = row.get('gia_tri_so')
+            
+            computed_gia_so = None
+            if 'tỷ' in gia_str and 'tỷ/m' not in gia_str:
+                match = re.search(r'([\d\,\.]+)\s*tỷ', gia_str)
+                if match:
+                    try:
+                        val = float(match.group(1).replace(',', '.'))
+                        computed_gia_so = int(val * 1_000_000_000)
+                    except: pass
+            elif 'triệu' in gia_str and 'triệu/m' not in gia_str and 'triệu / m' not in gia_str:
+                match = re.search(r'([\d\,\.]+)\s*triệu', gia_str)
+                if match:
+                    try:
+                        val = float(match.group(1).replace(',', '.'))
+                        computed_gia_so = int(val * 1_000_000)
+                    except: pass
+                    
+            if computed_gia_so and computed_gia_so >= 100_000:
+                # If gia_tri_so is missing or wrong (e.g. 4.5 instead of 4500000000)
+                if gia_so is None or (isinstance(gia_so, (int, float)) and abs(float(gia_so) - computed_gia_so) > 1000):
+                    issues.append("invalid price value")
+                    report_stats["issues_by_type"]["invalid_price_value"] += 1
+                    updates['gia_tri_so'] = computed_gia_so
 
         if issues:
             report_stats["total_issues"] += 1
