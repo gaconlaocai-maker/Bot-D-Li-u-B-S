@@ -1,6 +1,9 @@
 name: Run Auto Duplicate Guard Patrol
 
 on:
+  schedule:
+    # Runs at 18:00 UTC (01:00 VN time) every day
+    - cron: '0 18 * * *'
   workflow_dispatch:
     inputs:
       action:
@@ -25,14 +28,14 @@ on:
         required: true
         type: choice
         options:
-          - 'true'
           - 'false'
-        default: 'true'
+          - 'true'
+        default: 'false'
       limit:
-        description: 'Maximum number of items to scan'
+        description: 'Maximum number of items to scan (0 = no limit)'
         required: true
         type: string
-        default: '5'
+        default: '0'
 
 jobs:
   run-patrol:
@@ -61,11 +64,11 @@ jobs:
         CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
         PATROL_LOG_DIR: ./reports
       run: |
-        # Use inputs if manually triggered, otherwise defaults for safety
+        # Use inputs if manually triggered, otherwise defaults for production
         ACTION="${{ github.event.inputs.action || 'both' }}"
         MODE="${{ github.event.inputs.mode || 'safe-auto' }}"
-        DRY_RUN="${{ github.event.inputs.dry_run || 'true' }}"
-        LIMIT="${{ github.event.inputs.limit || '5' }}"
+        DRY_RUN="${{ github.event.inputs.dry_run || 'false' }}"
+        LIMIT="${{ github.event.inputs.limit || '0' }}"
         
         echo "Running Patrol with Action: $ACTION, Mode: $MODE, Dry Run: $DRY_RUN, Limit: $LIMIT"
         python run_patrol.py --action "$ACTION" --mode "$MODE" --dry-run "$DRY_RUN" --limit "$LIMIT"
