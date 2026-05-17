@@ -75,6 +75,20 @@ def get_supabase_client() -> Client:
         exit(1)
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
+def clean_job_salary(salary_str):
+    if not salary_str:
+        return "Thỏa thuận"
+    salary_str = str(salary_str).strip()
+    digits = re.sub(r'\D', '', salary_str)
+    if digits:
+        val = int(digits)
+        if val >= 1000000:
+            lower = salary_str.lower()
+            if any(w in lower for w in ["ngày", "ngay", "ca", "giờ", "gio", "tuần", "tuan"]):
+                salary_str = re.sub(r'[\/\s]+(ngày|ngay|ca|ca\s+làm|giờ|gio|tuần|tuan)\b', '/tháng', salary_str, flags=re.IGNORECASE)
+                salary_str = re.sub(r'\b(ngày|ngay|ca|ca\s+làm|giờ|gio|tuần|tuan)\b', 'tháng', salary_str, flags=re.IGNORECASE)
+    return salary_str
+
 def is_source_url(text):
     if not text:
         return False
@@ -415,6 +429,15 @@ def audit_viec_lam(supabase: Client, columns):
             if 'show_on_home' in columns: updates['show_on_home'] = False
             if 'trang_thai' in columns: updates['trang_thai'] = 'Ẩn'
             if 'needs_review' in columns: updates['needs_review'] = True
+            
+        # 1b. Salary Unit Check
+        if 'muc_luong' in columns:
+            muc_luong = row.get('muc_luong')
+            if muc_luong:
+                cleaned_luong = clean_job_salary(muc_luong)
+                if cleaned_luong != muc_luong:
+                    issues.append("corrected salary unit")
+                    updates['muc_luong'] = cleaned_luong
             
         # 2. Slug
         if 'slug' in columns and not row.get('slug'):

@@ -44,6 +44,20 @@ def tao_slug(s):
     s = re.sub(r'\s+', '-', s)
     return re.sub(r'-+', '-', s).strip('-')
 
+def clean_job_salary(salary_str):
+    if not salary_str:
+        return "Thỏa thuận"
+    salary_str = str(salary_str).strip()
+    digits = re.sub(r'\D', '', salary_str)
+    if digits:
+        val = int(digits)
+        if val >= 1000000:
+            lower = salary_str.lower()
+            if any(w in lower for w in ["ngày", "ngay", "ca", "giờ", "gio", "tuần", "tuan"]):
+                salary_str = re.sub(r'[\/\s]+(ngày|ngay|ca|ca\s+làm|giờ|gio|tuần|tuan)\b', '/tháng', salary_str, flags=re.IGNORECASE)
+                salary_str = re.sub(r'\b(ngày|ngay|ca|ca\s+làm|giờ|gio|tuần|tuan)\b', 'tháng', salary_str, flags=re.IGNORECASE)
+    return salary_str
+
 # ================= 2. AI BIÊN TẬP (AUTO-SWITCH KEYS & MODELS) =================
 def ai_analyze_job(text_tho):
     global vi_tri_groq_key
@@ -191,7 +205,7 @@ def run_bot():
                     print(f"   ⚠️ Lấy SĐT ẩn từ bài viết: {so_dien_thoai}")
 
             tieu_de = ad_dt.get('subject', 'Tuyển dụng Lào Cai')
-            muc_luong = ad_dt.get('price_string', 'Thỏa thuận')
+            muc_luong = clean_job_salary(ad_dt.get('price_string', 'Thỏa thuận'))
             cong_ty = ad_dt.get('company_name', 'Đang cập nhật')
             dia_diem = ad_dt.get('area_name', 'Lào Cai')
             
