@@ -114,6 +114,35 @@ def create_slug(text):
     text = re.sub(r'[^a-z0-9]+', '-', text)
     return text.strip('-')
 
+def extract_number(text):
+    if not text:
+        return 0
+    text_str = str(text).strip()
+    match = re.search(r'[\d\.,]+', text_str)
+    if not match:
+        return 0
+    num_str = match.group()
+    if '.' in num_str or ',' in num_str:
+        parts = re.split(r'[\.,]', num_str)
+        last_part = parts[-1]
+        if len(last_part) == 3:
+            clean_str = num_str.replace('.', '').replace(',', '')
+            try: return int(clean_str)
+            except ValueError: pass
+        elif len(last_part) in [1, 2]:
+            if len(parts) > 2:
+                whole_part = "".join(parts[:-1]).replace('.', '').replace(',', '')
+                clean_str = f"{whole_part}.{last_part}"
+            else:
+                clean_str = f"{parts[0]}.{parts[1]}"
+            try: return int(round(float(clean_str)))
+            except ValueError: pass
+    try:
+        clean_str = num_str.replace(',', '.')
+        return int(round(float(clean_str)))
+    except ValueError:
+        return 0
+
 def check_location(text):
     if not text: return False
     text = text.lower()
@@ -282,6 +311,10 @@ def audit_bds_ban(supabase: Client, columns):
                 if match:
                     issues.append("invalid area value")
                     report_stats["issues_by_type"]["invalid_area_value"] += 1
+                    repaired_area = extract_number(match.group(1))
+                    if repaired_area >= 10:
+                        updates['dien_tich'] = repaired_area
+                        issues.append(f"auto-repaired area to {repaired_area} m²")
                     if 'needs_review' in columns: updates['needs_review'] = True
 
         # 8. Price parsing error

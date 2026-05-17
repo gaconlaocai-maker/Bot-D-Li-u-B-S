@@ -36,12 +36,34 @@ supabase = create_client(os.environ.get("SUPABASE_URL"), os.environ.get("SUPABAS
 cloudinary.config(cloudinary_url=os.environ.get("CLOUDINARY_URL"))
 
 def extract_number(text):
-    if not text: return 0
-    match = re.search(r'\d+([.,]\d+)?', str(text))
-    if match:
-        num_str = match.group().replace(',', '.')
-        return int(float(num_str)) 
-    return 0
+    if not text:
+        return 0
+    text_str = str(text).strip()
+    match = re.search(r'[\d\.,]+', text_str)
+    if not match:
+        return 0
+    num_str = match.group()
+    if '.' in num_str or ',' in num_str:
+        parts = re.split(r'[\.,]', num_str)
+        last_part = parts[-1]
+        if len(last_part) == 3:
+            clean_str = num_str.replace('.', '').replace(',', '')
+            try: return int(clean_str)
+            except ValueError: pass
+        elif len(last_part) in [1, 2]:
+            if len(parts) > 2:
+                whole_part = "".join(parts[:-1]).replace('.', '').replace(',', '')
+                clean_str = f"{whole_part}.{last_part}"
+            else:
+                clean_str = f"{parts[0]}.{parts[1]}"
+            try: return int(round(float(clean_str)))
+            except ValueError: pass
+    try:
+        clean_str = num_str.replace(',', '.')
+        return int(round(float(clean_str)))
+    except ValueError:
+        return 0
+
 
 def tao_slug(s):
     if not s: return ""
