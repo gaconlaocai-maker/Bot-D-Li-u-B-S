@@ -195,6 +195,24 @@ def run_bot():
             cong_ty = ad_dt.get('company_name', 'Đang cập nhật')
             dia_diem = ad_dt.get('area_name', 'Lào Cai')
             
+            # Lọc địa điểm ngay từ đầu để tránh tốn tiền AI
+            dia_diem_lower = dia_diem.lower()
+            LAO_CAI_LOCATIONS = [
+                "lào cai", "sa pa", "sapa", "bắc hà", "bảo thắng", "bảo yên", "văn bàn",
+                "bát xát", "mường khương", "si ma cai"
+            ]
+            SUSPICIOUS_LOCATIONS = [
+                "đông anh", "thủ dầu một", "bảo lộc", "quận 1", "tp.hcm", "hồ chí minh",
+                "hà nội", "bình dương", "đồng nai", "yên bái", "nghĩa lộ"
+            ]
+            
+            is_valid_loc = any(loc in dia_diem_lower for loc in LAO_CAI_LOCATIONS)
+            is_suspicious = any(loc in dia_diem_lower for loc in SUSPICIOUS_LOCATIONS)
+            
+            if not is_valid_loc or is_suspicious:
+                print(f"   ❌ BỎ QUA: Vị trí tuyển dụng không thuộc Lào Cai ({dia_diem})")
+                continue
+                
             ai_data = ai_analyze_job(text_tho)
             
             if ai_data:
