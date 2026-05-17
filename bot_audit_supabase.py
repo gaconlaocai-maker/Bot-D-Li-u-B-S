@@ -363,19 +363,54 @@ def audit_viec_lam(supabase: Client, columns):
         updates = {}
         issues = []
         
-        dia_diem = str(row.get('dia_diem', '')).lower()
-        if any(loc in dia_diem for loc in SUSPICIOUS_LOCATIONS) and not check_location(dia_diem):
+        # 1. Location check (Fix: column is 'vi_tri', not 'dia_diem')
+        vi_tri = str(row.get('vi_tri', '')).lower()
+        if any(loc in vi_tri for loc in SUSPICIOUS_LOCATIONS) and not check_location(vi_tri):
             issues.append("job off region")
             report_stats["issues_by_type"]["off_region"] += 1
             if 'show_on_home' in columns: updates['show_on_home'] = False
             if 'trang_thai' in columns: updates['trang_thai'] = 'Ẩn'
             if 'needs_review' in columns: updates['needs_review'] = True
             
+        # 2. Slug
         if 'slug' in columns and not row.get('slug'):
             issues.append("missing slug")
             report_stats["issues_by_type"]["invalid_slug"] += 1
             base_slug = create_slug(row.get('tieu_de'))
             updates['slug'] = f"{base_slug}-{row['id']}" if 'id' in row else f"{base_slug}-{int(time.time())}"
+
+        # 3. Expired job check (Chợ Tốt link_goc)
+        if 'link_goc' in columns:
+            url = row.get('link_goc')
+            if url and 'chotot.com' in url:
+                try:
+                    res = curl_requests.get(url, impersonate="chrome", timeout=10, allow_redirects=False)
+                    if res.status_code in [301, 302, 404] or "Tin này đã bị ẩn" in res.text or "Không tìm thấy" in res.text:
+                        issues.append("expired job")
+                        if "expired_post" not in report_stats["issues_by_type"]: report_stats["issues_by_type"]["expired_post"] = 0
+                        report_stats["issues_by_type"]["expired_post"] += 1
+                        if 'trang_thai' in columns: updates['trang_thai'] = 'Ẩn'
+                        if 'show_on_home' in columns: updates['show_on_home'] = False
+                except:
+                    pass
+
+        # 4. Orphaned old jobs (no link_goc and older than 90 days)
+        if 'created_at' in columns:
+            created_at_str = row.get('created_at')
+            url = row.get('link_goc') or updates.get('link_goc')
+            if not url and created_at_str:
+                try:
+                    dt_str = created_at_str.split('+')[0].split('Z')[0].split('.')[0]
+                    dt = datetime.fromisoformat(dt_str)
+                    days_old = (datetime.now() - dt).days
+                    if days_old > 90:
+                        issues.append("orphaned old job")
+                        if "orphaned_old_post" not in report_stats["issues_by_type"]: report_stats["issues_by_type"]["orphaned_old_post"] = 0
+                        report_stats["issues_by_type"]["orphaned_old_post"] += 1
+                        if 'trang_thai' in columns: updates['trang_thai'] = 'Ẩn'
+                        if 'show_on_home' in columns: updates['show_on_home'] = False
+                except Exception as e:
+                    pass
 
         if issues:
             report_stats["total_issues"] += 1
